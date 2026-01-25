@@ -1,0 +1,4021 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.jsdelivr.net/npm/p5@1.11.7/lib/p5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/p5@0.7.0/lib/addons/p5.sound.min.js"></script>
+<script type="importmap">
+    {
+      "imports": {
+        "mediabunny": "https://cdn.jsdelivr.net/npm/mediabunny@1.25.8/+esm"
+      }
+    }
+  </script>
+<style>
+    body {
+      margin: 0;
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      justify-content: center;
+      align-items: center;
+      overflow: auto;
+      background: transparent;
+    }
+
+    main {
+      height: 100%;
+      display: flex;
+      overflow: auto;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #p5_loading {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      animation-delay: 1s;
+      color: #4e5d7b;
+      font-family: "FK Grotesk Regular", sans-serif;
+      font-size: 30px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 30px;
+      letter-spacing: -1.5px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .5; }
+    }
+  </style>
+<title>PICK A PILL (Copy) | Made on juno.transient.xyz</title>
+</head>
+<body>
+<script>
+// ===== EXTERNAL SUBMIT PAGE (edit this) =====
+const SUBMIT_BASE_URL = "https://pick-a-pill-leaderboard-clean.vercel.app/submit.html";
+const DEFAULT_CONTRACT_ADDRESS = "0xb34ccecaf58700eb0641c0d3c08ef822b05c3570";
+const DEFAULT_TOKEN_ID = "1";
+
+
+    let imgBase;
+let imgGirlAction;
+let imgGirlSelection;
+let imgGirlSelected; // Variable for the first final selection GIF
+let imgWallOpeningFrames = []; // Array to hold p5.Image frames for wall opening
+let wallOpeningFrameIndex = 0; // Current frame index for wall opening
+let imgEyeBlink;
+let imgPillPink;
+let imgPillBlue;
+let showGirlAction = false;
+let showGirlSelection = false;
+let showGirlSelected = false; // State flag for the first final GIF
+let showWallOpening = false; // New state flag for the second final GIF
+// wallOpeningStarted has been removed
+let showGenerativeArt = false; // New state flag for the generative art
+let showEyeBlink = false;
+let cnv;
+let isMobile; // GLOBAL: Re-introducing isMobile flag
+let motionAccessGranted = false; // NEW: Flag for device motion permission on mobile
+let targetWidth = 2000;
+let targetHeight = 1500;
+let finalSequenceStarted = false; // NEW: Flag to permanently disable the base image
+let narrativeState = 'off'; // 'pill_sequence', 'instruction_sequence', 'off'
+fetchLatestLeaderboardAndRender();
+
+// NEW: Typewriter constants
+const TYPEWRITER_TEXT = "Save your soul, Pick a pill...";
+const TYPEWRITER_CHAR_DURATION = 50; // 50ms delay per character for 20 FPS typing
+
+// NEW: Narrative sequencing constants
+const NARRATIVE_TEXT_HOLD = 2000; // Hold time for a full line before fade/transition
+const NARRATIVE_TEXT_FADE = 500; // Fade time for line transition
+
+// NEW: Game Instruction narrative
+const NARRATIVE_INSTRUCTION_1 = "CLICK TO SHOOT AND DEFEND YOUR CORE.";
+const NARRATIVE_INSTRUCTION_2 = "TAKE DAMAGE AND LOSE YOUR SOUL.";
+
+// NEW: Narrative text constants for the wall opening sequence
+const NARRATIVE_TEXT_3 = "It’s a living language.";
+const NARRATIVE_TEXT_4 = "A signal meant for those who look past the surface…";
+const NARRATIVE_TEXT_5 = "Defend the transmission.";
+const NARRATIVE_TEXT_6 = "If it collapses, so do you.";
+
+const PILL_NARRATIVE_TEXTS = [
+    "Your choice has been made.", // Line 1
+    "The walls remember it before you do.", // Line 2
+    NARRATIVE_TEXT_3,
+    NARRATIVE_TEXT_4,
+    NARRATIVE_TEXT_5,
+    NARRATIVE_TEXT_6,
+];
+const INSTRUCTION_NARRATIVE_TEXTS = [
+    NARRATIVE_INSTRUCTION_1,
+    NARRATIVE_INSTRUCTION_2,
+];
+
+// Global structure to hold pre-calculated timing
+let pillNarrativeTimingData = []; // Will hold timing for lines 1-6
+let instructionNarrativeTimingData = []; // Will hold timing for lines 7-8
+
+// NEW: Timing variable for narrative text
+let pillNarrativeStartTime = 0;
+let instructionNarrativeStartTime = 0;
+
+// Variables for the orb pulse
+const ORB_PULSE_AMPLITUDE = 0.3; // Max shrink amount (30%)
+const ORB_PULSE_FREQUENCY = 0.05; // Faster, more noticeable pulse rate
+
+// --- REBUILD/EXPLODE VARIABLES ---
+let holdStartTime = 0;
+let isHolding = false;
+const REBUILD_HOLD_DURATION = 3000; // 3 seconds
+let isExploding = false; // NEW: State for gradual explosion
+let explosionStartTime = 0; // NEW: Timer for explosion
+const EXPLOSION_DURATION = 1500; // 1.5 seconds for the fade out
+// --- END REBUILD/EXPLODE VARIABLES ---
+
+// --- GAME VARIABLES ---
+let isGameActive = false;
+let spaceships = [];
+// Enemy projectiles removed to enforce sub-50 score experience
+let layerOpacities = [0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]; // Index 0 unused, 1-6 for layers
+const LAYER_HEALTH_MAX = 2; // How many hits a layer can take
+let layerHealth = [0, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX];
+let activeLayerIndex = 6; // Start with the front-most layer (Layer 6)
+const BASE_SPAWN_RATE = 45; // Base spawn rate in frames (was 60, now slightly faster)
+let score = 0;
+let highScore = 0; // Existing single high score tracking
+let isNewHighScore = false; // NEW: Flag to track if the current score is a new #1 score
+// NEW: Top 10 High Scores
+let hiScores = [];
+const MAX_HI_SCORES = 10;
+const DEFAULT_NAME = 'NON'; // NEW: Default name for high scores
+
+const API_BASE = "https://pick-a-pill-leaderboard-clean.vercel.app"; 
+
+
+
+// ===== Display name (ENS preferred) =====
+const ENS_CACHE = new Map();
+
+function shortenAddress5(addr) {
+  if (!addr || addr.length < 10) return "UNKNOWN";
+  return `${addr.slice(0, 5)}…${addr.slice(-4)}`;
+}
+
+async function resolveENS(address) {
+  try {
+    if (!address) return null;
+    const key = address.toLowerCase();
+    if (ENS_CACHE.has(key)) return ENS_CACHE.get(key);
+
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 2500);
+
+    const url = `https://api.ensideas.com/ens/resolve/${address}`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(t);
+
+    if (!res.ok) throw new Error("ens_lookup_failed");
+    const data = await res.json();
+    const name = data?.name || null;
+
+    ENS_CACHE.set(key, name);
+    return name;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getDisplayNameForAddress(address) {
+  const ens = await resolveENS(address);
+  return ens || shortenAddress5(address);
+}
+
+
+
+// ===== WalletConnect (Choose Wallet UI) =====
+const WC_PROJECT_ID = "cc40f8afe4270c129e4252192e8951e6";
+const WC_CHAINS = [1]; // Ethereum mainnet
+
+let activeProvider = null;
+let activeAddress = null;
+let wcProvider = null;
+
+let pendingScoreToSubmit = null;
+let pendingPreviousHighScore = 0;
+
+/**
+ * Finalize a queued leaderboard submission after wallet connects:
+ * - sets local leaderboard name to connected wallet (short)
+ * - saves locally as fallback
+ * - submits to global leaderboard API
+ */
+function finalizeQueuedHighScore() {
+  // Legacy: kept for backwards compatibility.
+  // We now ask the user to confirm before submitting.
+  if (pendingScoreToSubmit === null) return;
+  showGameOverSubmitPrompt(pendingScoreToSubmit);
+}
+
+function openWalletModal() {
+  const m = document.getElementById("walletModal");
+  if (m) m.style.display = "flex";
+  setWalletModalStatus("");
+}
+function closeWalletModal() {
+  const m = document.getElementById("walletModal");
+  if (m) m.style.display = "none";
+  setWalletModalStatus("");
+}
+function setWalletModalStatus(msg) {
+  const el = document.getElementById("walletModalStatus");
+  if (el) el.textContent = msg || "";
+}
+
+
+
+// ===== Submit Score Prompt =====
+function setSubmitScoreModalStatus(msg) {
+  const el = document.getElementById("submitScoreModalStatus");
+  if (el) el.textContent = msg || "";
+}
+function openSubmitScoreModal(score) {
+  const m = document.getElementById("submitScoreModal");
+  const addrEl = document.getElementById("submitScoreAddress");
+  const scoreEl = document.getElementById("submitScoreValue");
+  if (addrEl) addrEl.textContent = activeAddress || "";
+  if (scoreEl) scoreEl.textContent = String(score ?? "");
+  if (m) m.style.display = "flex";
+  setSubmitScoreModalStatus("");
+}
+function closeSubmitScoreModal() {
+  const m = document.getElementById("submitScoreModal");
+  if (m) m.style.display = "none";
+  setSubmitScoreModalStatus("");
+}
+
+
+// ===== Game Over Prompt (no in-frame wallet connect) =====
+function showGameOverSubmitPrompt(score) {
+  try {
+    const overlay = document.getElementById("gameOverSubmitPrompt");
+    const text = document.getElementById("gameOverSubmitPromptText");
+    const btnSubmit = document.getElementById("btnGameOverSubmit");
+    const btnPlay = document.getElementById("btnGameOverPlay");
+
+    if (!overlay || !text || !btnSubmit || !btnPlay) return;
+
+    text.textContent = "Your score: " + String(score ?? "") + ". Submit it to the global leaderboard?";
+    const fb = document.getElementById("submitLinkFallback"); if (fb) fb.style.display = "none";
+
+    overlay.style.display = "flex";
+
+    btnSubmit.onclick = () => {
+      overlay.style.display = "none";
+      // Use the existing offloaded submit flow (opens external submit.html with the queued score)
+      // pendingScoreToSubmit is already set in the game-over logic.
+      if (typeof submitQueuedHighScore === "function") {
+        submitQueuedHighScore();
+      } else {
+        // Hard fallback (should not happen)
+        const s = score ?? 0;
+        const submitUrl = "https://pick-a-pill-leaderboard-clean.vercel.app/submit.html" + encodeURIComponent(s);
+        try { window.open(submitUrl, "_blank", "noopener,noreferrer"); }
+        catch { (window.top || window).location.href = submitUrl; }
+      }
+    };
+
+    btnPlay.onclick = () => {
+      overlay.style.display = "none";
+      // safest universal restart
+      try { window.location.reload(); } catch {}
+    };
+  } catch (e) {
+    // If anything goes wrong, just fall back to reload
+    try { window.location.reload(); } catch {}
+  }
+}
+
+// If your old submit modal exists, keep it hidden
+(function(){
+  const old = document.getElementById("submitScoreModal");
+  if (old) old.style.display = "none";
+})();
+
+function showSubmitLinkFallback(submitUrl){
+  try {
+    const overlay = document.getElementById("gameOverSubmitPrompt");
+    const fb = document.getElementById("submitLinkFallback");
+    const urlEl = document.getElementById("submitLinkUrl");
+    const openEl = document.getElementById("submitLinkOpen");
+    const copyBtn = document.getElementById("submitLinkCopy");
+    if (!overlay || !fb || !urlEl || !openEl || !copyBtn) return false;
+    fb.style.display = "block";
+    urlEl.value = submitUrl;
+    openEl.href = submitUrl;
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(submitUrl);
+        copyBtn.textContent = "Copied!";
+        setTimeout(()=>{ copyBtn.textContent = "Copy link"; }, 1200);
+      } catch (e) {
+        // Fallback: select for manual copy
+        urlEl.focus();
+        urlEl.select();
+        copyBtn.textContent = "Select & copy";
+        setTimeout(()=>{ copyBtn.textContent = "Copy link"; }, 1200);
+      }
+    };
+    // keep overlay visible
+    overlay.style.display = "flex";
+    return true;
+  } catch(e){ return false; }
+}
+
+async function submitQueuedHighScore() {
+  // Wallet connections/signatures are handled ONLY on the external submit page.
+  if (pendingScoreToSubmit === null) return false;
+
+  const finalScore = pendingScoreToSubmit;
+
+  // Clear pending state so we don't double-submit
+  pendingScoreToSubmit = null;
+  pendingPreviousHighScore = null;
+
+  // Try to read contract/tokenId from the game URL hash first
+  let contract = DEFAULT_CONTRACT_ADDRESS;
+  let tokenId = DEFAULT_TOKEN_ID;
+
+  try {
+    const hash = (window.location.hash || "").replace(/^#/, "");
+    const params = new URLSearchParams(hash);
+    contract = params.get("contract") || contract;
+    tokenId = params.get("tokenId") || tokenId;
+  } catch (e) {
+    // ignore
+  }
+
+  const submitUrl =
+    SUBMIT_BASE_URL +
+    "#score=" + encodeURIComponent(finalScore) +
+    "&contract=" + encodeURIComponent(contract) +
+    "&tokenId=" + encodeURIComponent(tokenId);
+
+  // Try to open a new tab/window. If popups are blocked (common in sandboxed iframes),
+  // show an on-screen fallback with a copyable link.
+  try {
+    const w = window.open(submitUrl, "_blank", "noopener,noreferrer");
+    if (!w) {
+      showSubmitLinkFallback(submitUrl);
+      return true;
+    }
+  } catch (e) {
+    showSubmitLinkFallback(submitUrl);
+    return true;
+  }
+
+  return true;
+}
+function skipQueuedHighScore() {
+  pendingScoreToSubmit = null;
+  pendingPreviousHighScore = null;
+  closeSubmitScoreModal();
+  setHudMessage("Score not submitted.", 3000);
+}
+async function connectWalletConnect() {
+  const WC = globalThis?.["@walletconnect/ethereum-provider"]?.EthereumProvider;
+  if (!WC) throw new Error("WalletConnect library not loaded");
+
+  wcProvider = await WC.init({
+    projectId: WC_PROJECT_ID,
+    chains: WC_CHAINS,
+    showQrModal: true
+  });
+
+  await wcProvider.connect();
+
+  activeProvider = wcProvider;
+  const accounts = await wcProvider.request({ method: "eth_accounts" });
+  activeAddress = accounts?.[0] || null;
+
+  wcProvider.on?.("accountsChanged", (accs) => {
+    activeAddress = accs?.[0] || null;
+  });
+
+  return activeAddress;
+}
+
+window.addEventListener("load", () => {
+  document.getElementById("closeWalletModal")?.addEventListener("click", closeWalletModal);
+
+  document.getElementById("btnWalletConnect")?.addEventListener("click", async () => {
+    try {
+      setWalletModalStatus("Opening WalletConnect…");
+      await connectWalletConnect();
+      setWalletModalStatus("Connected ✓");
+
+      // If a score is waiting to be submitted, finalize it now.
+      finalizeQueuedHighScore();
+
+      setTimeout(closeWalletModal, 350);
+    } catch (e) {
+      setWalletModalStatus(e?.message || String(e));
+    }
+
+
+  // Submit-score modal buttons
+  document.getElementById("closeSubmitScoreModal")?.addEventListener("click", () => {
+    // Close only; keep pending score (user can re-open by triggering submit again)
+    closeSubmitScoreModal();
+  });
+
+  document.getElementById("btnConfirmSubmitScore")?.addEventListener("click", async () => {
+    // Close the in-canvas modal immediately before wallet/sign prompts
+    closeSubmitScoreModal();
+
+    // External submit flow (no in-frame wallet)
+    await submitQueuedHighScore();
+  });
+
+  document.getElementById("btnSkipSubmitScore")?.addEventListener("click", () => {
+    skipQueuedHighScore();
+  });
+
+  });});
+
+// Global leaderboard API
+
+function shortenAddress(addr) {
+  if (!addr || addr.length < 10) return DEFAULT_NAME;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+//
+// HUD status message helpers (wallet / leaderboard)
+//
+let hudMessage = "";
+let hudMessageUntil = 0;
+function setHudMessage(msg, ms = 3500) {
+  hudMessage = msg || "";
+  hudMessageUntil = hudMessage ? (Date.now() + ms) : 0;
+}
+
+
+// Fetch Top 10 from the global leaderboard (non-blocking; safe for sandboxed NFT renderers)
+async function fetchGlobalLeaderboard() {
+  try {
+    const res = await fetch(`${API_BASE}/api/leaderboard`, { cache: "no-store" });
+    if (!res.ok) throw new Error("leaderboard_fetch_failed");
+    const data = await res.json();
+
+    // data: [{address, score, created_at}]
+    hiScores = (Array.isArray(data) ? data : []).map(x => ({
+      name: String(x.address || DEFAULT_NAME),
+      score: Number(x.score) || 0
+    }));
+
+    while (hiScores.length < MAX_HI_SCORES) hiScores.push({ score: 0, name: DEFAULT_NAME });
+    hiScores = hiScores.slice(0, MAX_HI_SCORES);
+
+    hiScores.sort((a, b) => (b.score || 0) - (a.score || 0));
+    highScore = hiScores[0]?.score || 0;
+  } catch (e) {
+    // Fail silently; local defaults still render
+    console.warn("Global leaderboard unavailable:", e);
+  }
+}
+
+let _isSubmittingGlobalScore = false;
+
+// Submit score globally (wallet signs; server verifies ERC-1155 ownership tokenId=1)
+async function submitGlobalScore(finalScore) {
+  try {
+    // Require a WalletConnect session (works in iframe/NFT renderers)
+    if (!activeProvider || !activeAddress) {
+      throw new Error("Wallet not connected");
+    }
+
+    setHudMessage("Sign to submit your score…", 7000);
+
+    const payload = { address: activeAddress, score: finalScore, ts: Date.now() };
+    const message = JSON.stringify(payload);
+
+    const sig = await activeProvider.request({
+      method: "personal_sign",
+      params: [message, activeAddress]
+    });
+
+    setHudMessage("Submitting score…", 7000);
+
+    const res = await fetch(`${API_BASE}/api/submit-score`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload, sig })
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || "submit_failed");
+    }
+
+    await fetchGlobalLeaderboard();
+    setHudMessage("Submitted ✓", 4500);
+    return true;
+  } catch (err) {
+    const msg = (err && (err.message || err.toString())) ? (err.message || err.toString()) : "submit_failed";
+
+    // Common UX-friendly messages
+    if (msg.includes("not_holder")) {
+      setHudMessage("NFT holder required to submit.", 7000);
+    } else if (msg.includes("Wallet not connected") || msg.includes("not_connected")) {
+      setHudMessage("Connect wallet to submit.", 6000);
+    } else if (msg.includes("user rejected") || msg.includes("User rejected") || msg.includes("4001")) {
+      setHudMessage("Signature cancelled.", 5000);
+    } else {
+      setHudMessage("Submit failed — try again.", 6000);
+    }
+
+    console.warn("Global submit failed:", err);
+    return false;
+  }
+}
+
+
+// NEW: Name input state
+let isAwaitingName = false; 
+let nameInput; // p5.Element for name entry
+
+let orbDamageTime = 0; // NEW: Time of last orb hit
+let lastHitScore = 0; // NEW: Score at time of last hit
+let scoreMultiplier = 1.0; // NEW: Current score multiplier
+let nextRewardThreshold = 100; // NEW: Next score multiple to check for reward
+const MAX_ENEMIES = 5; // Cap the total number of spaceships on screen for performance (was 10)
+const ADVANCED_SHIP_START_SCORE = 50; // Score at which advanced ships start appearing (was 150)
+const BASE_SHIP_PHASEOUT_SCORE = 150; // Score at which base ships stop spawning (was 300)
+let gameplayPerformanceFactor = 1.0; // 1.0 at low scores, decreases at high scores for optimization
+const PARTICLE_COLLISION_FACTOR = 0.1; // NEW: Fixed optimization to check only 10% of particle collision checks
+
+// NEW: Ammo/Power Variables
+const SHOOTING_DURATION = 1000; // 1 second in ms
+const BASE_RECHARGE_DURATION = 1500; // 1.5 seconds base recharge in ms (RENAMED)
+const RECHARGE_FACTOR = 1.2; // Recharge time is 20% longer than fire time
+const MIN_RECHARGE_DURATION = 300; // Minimum recharge time in ms
+let maxAmmoTime = SHOOTING_DURATION; // Total available time to shoot (1000ms)
+let currentAmmoTime = maxAmmoTime; // Current available shooting time
+let isWeaponAvailable = true; // Can we start shooting?
+let rechargeStartTime = 0; // When did recharge start?
+let currentRechargeDuration = BASE_RECHARGE_DURATION; // Dynamic recharge limit based on score
+
+let killStreak = 0; // NEW: Track consecutive kills
+const KILL_STREAK_REGEN_THRESHOLD = 10; // Streak required for instant regen
+let instantPowerRegenActive = false; // NEW: Flag for kill streak power boost (permanent until damage)
+
+// --- POWER-UP VARIABLES (NEW) ---
+let powerUps = [];
+const POWERUP_SIZE = 12;
+const POWERUP_SPEED = 0.5;
+const POWERUP_COOLDOWN = 6000; // 6 seconds in milliseconds
+let lastPowerUpSpawnTime = 0;
+const AMMO_BOOST_DURATION = 5000; // 5 seconds of instant ammo
+let powerUpAmmoBoostActive = false; // NEW FLAG for timed power-up boost
+let ammoBoostEndTime = 0;
+// --- END GAME VARIABLES ---
+
+// Variables for the motion trail effect
+let currentTrailAlpha = 0;
+const MAX_TRAIL_ALPHA = 50; // The target alpha for the trail
+const TRAIL_LERP_FACTOR = 0.1; // Smoothness factor for the ease-in/out
+const MOVEMENT_THRESHOLD = 0.05; // Threshold for normalized movement (-1 to 1)
+
+// Variables for managing GIF playback state
+let girlActionStartTime = 0;
+const GIRL_ACTION_DURATION = 1000;
+const EYE_BLINK_SCALE = 0.5; // Constant for scaling the smaller elements
+const PILL_SCALE = 0.3; // New constant for scaling the pills down further
+
+// Variables for the entrance/exit animation
+let entranceStartTime = 0;
+let exitStartTime = 0; // New timer for the exit animation
+let isExiting = false; // Flag to indicate if the elements are exiting
+const ANIMATION_DURATION = 500; // Duration for both entrance and exit (set to 500ms)
+
+// State variable to track which pill was selected
+let pillSelected = null; // 'pink', 'blue', or null
+
+// Timing variables for the final two sequences
+let girlSelectedStartTime = 0;
+// DURATION: The first GIF plays for 1500ms before the wall opens
+const GIRL_SELECTED_DURATION = 1500;
+let wallOpeningStartTime = 0;
+// UPDATED DURATION: 10 frames @ 60ms per frame = 600ms total
+const WALL_OPENING_DURATION = 600;
+
+// Variables for prompt management
+let promptStartTime = 0;
+const PROMPT_DURATION = 5000; // 5 seconds
+let currentPromptType = null; // 'initial', 'art', or null
+
+// NEW: Fast forward state for line generation
+let isFastForwardingLineGen = false; 
+const FAST_FORWARD_SPEED = 100; // Segments per frame when fast-forwarding (10x faster than default 10)
+
+// --- GENERATIVE ART VARIABLES (Line Attractor) ---
+let fullPalettePink = ['#191515', '#ff0660', '#7f1641', '#ff91af', '#c90049', '#e25d9f', '#ffdee8'];
+let fullPaletteBlue = ['#191515', '#0000ff', '#06a9ff', '#06bfad', '#060091', '#005d9f', '#85daff'];
+let palette = []; // This will hold the 3 selected colors
+let orbBaseColor; // NEW: The single color used for the glowing orb
+let particleBaseColor; // NEW: Color specifically for the particles
+let currentLine = 0;
+const MAX_LINES_LIMIT = 150; // Updated upper limit for the number of lines
+let totalLines; // The randomized number of lines for the current composition
+let lineSpeed = 10; // Number of segments to draw per frame
+let lineData = []; // Line data for the composition
+// Variables to hold the calculated drawing bounds for the art
+let currentDrawW, currentDrawH, currentOffsetX, currentOffsetY;
+let orbData = null; // Data for the glowing orb
+
+let artBufferLayer1; // Back layer (least movement)
+let artBufferLayer2; 
+let artBufferLayer3; // Layer 3
+let artBufferLayer4;
+let artBufferLayer5; 
+let artBufferLayer6; // Extreme front layer (most movement)
+let artBufferOrb; // NEW: Buffer for the glowing orb
+let artBufferParticles; // NEW: Buffer for the particles
+
+let artIsFinished = false; // New flag for art completion and interaction mode
+let artBackgroundDrawn = false; // NEW: Flag to track if the static background is drawn to the main canvas
+
+// Define parallax multipliers (Layer 1 moves least, Layer 6 moves most)
+// These are relative to the overall draw area size
+const PARALLAX_FACTORS = {
+    1: { shift: 2, rot: 0.001 }, // Layer 1 (Back)
+    2: { shift: 4, rot: 0.003 }, // Layer 2
+    3: { shift: 6, rot: 0.005 }, // Layer 3
+    ORB: { shift: 7, rot: 0.006 }, // Orb Layer (Between L3 and L4)
+    4: { shift: 8, rot: 0.007 }, // Layer 4
+    5: { shift: 10, rot: 0.009 }, // Layer 5
+    6: { shift: 25, rot: 0.02 }, // Layer 6 (Extreme Front) - Increased shift for extreme effect
+    PARTICLE: { shift: 30, rot: 0.03 } // NEW: Particle Layer (Max Front)
+};
+// --- END GENERATIVE ART VARIABLES ---
+
+// --- PARTICLE SYSTEM VARIABLES ---
+let particles = [];
+let isGeneratingParticles = false; // Flag for click-and-hold particle generation
+const PARTICLE_RATE_DESKTOP = 3; // MATCHED MOBILE RATE for performance
+const PARTICLE_RATE_MOBILE = 3; // Reduced from 5, now 3
+// --- END PARTICLE SYSTEM VARIABLES ---
+
+function preload() {
+  // Load the BASE GIF
+  imgBase = loadImage('https://dae.transientusercontent.xyz/uploads/c7fe67a2-8aa1-46dd-865c-51b4d2d7df93');
+  // Load the click-activated GIF
+  imgGirlAction = loadImage('https://dae.transientusercontent.xyz/uploads/b02d6a6a-b2de-4139-982b-6b17a3707d03');
+  // Load the layer that follows Girl-Action
+  imgGirlSelection = loadImage('https://dae.transientusercontent.xyz/uploads/f5ac5164-0f7d-4682-b7fb-541d67fdf223');
+
+  // Load the GIFs that play after a selection is made
+  // Using createImg for full GIF playback capability
+  imgGirlSelected = createImg('https://dae.transientusercontent.xyz/uploads/a8d709cf-b107-4393-aecd-d21d194a3225'); // Updated to the new, smoother GIF
+  imgGirlSelected.hide();
+
+  // Load the PNG frames sequentially for the wall opening animation
+  imgWallOpeningFrames[0] = loadImage('https://dae.transientusercontent.xyz/uploads/7de41dab-5930-4cb8-9a7b-1600946e6dd3'); // Door Open-80000.png
+  imgWallOpeningFrames[1] = loadImage('https://dae.transientusercontent.xyz/uploads/e8beb49f-85c5-4eab-b873-779f88ae77da'); // Door Open-80001.png
+  imgWallOpeningFrames[2] = loadImage('https://dae.transientusercontent.xyz/uploads/6e1a1ef7-8abe-4023-b058-2bce95390c8e'); // Door Open-80002.png
+  imgWallOpeningFrames[3] = loadImage('https://dae.transientusercontent.xyz/uploads/db806aac-7a25-43a0-b9ea-fde133b96262'); // Door Open-80003.png
+  imgWallOpeningFrames[4] = loadImage('https://dae.transientusercontent.xyz/uploads/ecac1413-e5a3-4dd8-a2f6-3814aebc9aaa'); // Door Open-80004.png
+  imgWallOpeningFrames[5] = loadImage('https://dae.transientusercontent.xyz/uploads/ef31109e-d648-4c51-820d-5308b6032818'); // Door Open-80005.png
+  imgWallOpeningFrames[6] = loadImage('https://dae.transientusercontent.xyz/uploads/28cec52f-f373-4cb5-9176-fce2a594da80'); // Door Open-80006.png
+  imgWallOpeningFrames[7] = loadImage('https://dae.transientusercontent.xyz/uploads/bcbb1603-3f7b-4bf4-bc0c-15f69dcbfd92'); // Door Open-80007.png
+  imgWallOpeningFrames[8] = loadImage('https://dae.transientusercontent.xyz/uploads/9ee8e13c-2bbe-4f98-a52b-4f79938b04c6'); // Door Open-80008.png
+  imgWallOpeningFrames[9] = loadImage('https://dae.transientusercontent.xyz/uploads/3f67af40-6cf6-4872-b3a0-3d5278702a6a'); // Door Open-80009.png
+
+  // Load the animated assets using createImg for APNG animation
+  imgEyeBlink = createImg('https://dae.transientusercontent.xyz/uploads/da4d3b4d-c9c4-4bf0-8ddd-ff16a04234cf');
+  imgEyeBlink.hide();
+
+  // JUNO RECIPE FIX: Use createImg for APNG/GIF pills
+  imgPillPink = createImg('https://dae.transientusercontent.xyz/uploads/42ed4dd6-2ff1-454e-be75-cca1db2175d2');
+  imgPillPink.hide();
+
+  imgPillBlue = createImg('https://dae.transientusercontent.xyz/uploads/33dea31d-3316-416a-83d7-7b6a1266f5bf');
+  imgPillBlue.hide();
+}
+
+function calculateDrawingBounds() {
+    let scaleFactor = min(width / targetWidth, height / targetHeight);
+    currentDrawW = targetWidth * scaleFactor;
+    currentDrawH = targetHeight * scaleFactor;
+    currentOffsetX = (width - currentDrawW) / 2;
+    currentOffsetY = (height - currentDrawH) / 2;
+}
+
+
+// --- SAFE STORAGE HELPERS (works in sandboxed/opaque iframe environments) ---
+function safeLocalStorageGet(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function safeLocalStorageSet(key, value) {
+  try { localStorage.setItem(key, value); return true; } catch (e) { return false; }
+}
+
+function saveHiScores() {
+  // If storage is blocked, this becomes a no-op (scores still work for the session).
+  safeLocalStorageSet('juno_top10_scores', JSON.stringify(hiScores));
+}
+
+function loadHiScores() {
+  // Initialize defaults so the game never crashes.
+  hiScores = new Array(MAX_HI_SCORES).fill(null).map(() => ({ score: 0, name: DEFAULT_NAME }));
+  highScore = 0;
+
+  // Try to hydrate from local storage (best-effort) AND from the global leaderboard.
+  // Local storage may be blocked in some NFT renderers; global fetch may be blocked offline.
+  const savedScores = safeLocalStorageGet('juno_top10_scores');
+  if (savedScores) {
+    try {
+      const parsed = JSON.parse(savedScores);
+      if (Array.isArray(parsed)) {
+        hiScores = parsed.map(item => {
+          if (typeof item === 'number') return { score: item, name: DEFAULT_NAME };
+          return { score: Number(item?.score) || 0, name: (item?.name || DEFAULT_NAME) };
+        });
+
+        while (hiScores.length < MAX_HI_SCORES) hiScores.push({ score: 0, name: DEFAULT_NAME });
+        hiScores = hiScores.slice(0, MAX_HI_SCORES);
+      }
+    } catch (e) {}
+  }
+
+  hiScores.sort((a, b) => (b.score || 0) - (a.score || 0));
+  highScore = hiScores[0]?.score || 0;
+
+  // Kick off global fetch (non-blocking)
+  fetchGlobalLeaderboard();
+}
+
+function updateAndSaveHiScores(finalScore) {
+  // Keep local best-effort list updated for immediate UI feedback
+  const previousHighScore = hiScores[0]?.score || 0;
+  const lowestScore = hiScores[MAX_HI_SCORES - 1]?.score || 0;
+
+  // If the score is high enough to enter the list, attempt global submit.
+  if (finalScore > lowestScore) {
+    // Only connect a wallet when a score actually qualifies for the leaderboard.
+    pendingScoreToSubmit = finalScore;
+    pendingPreviousHighScore = previousHighScore;
+
+    // If not connected yet, prompt WalletConnect now.
+    if (!activeProvider || !activeAddress) {
+      setHudMessage("Top 10! Connect wallet to submit…", 6000);
+      openWalletModal();
+      setWalletModalStatus("Connect wallet to submit your score…");
+      return;
+    }
+
+    // Already connected — ask before submitting.
+    setHudMessage("Top 10! Ready to submit?", 6000);
+    showGameOverSubmitPrompt(pendingScoreToSubmit);
+    return;
+  }
+
+  // Not a leaderboard score: just save local fallback
+  isNewHighScore = false;
+  saveHiScores();
+}
+
+function createNameInput() {
+  // Name entry disabled: we use the connected wallet address as the leaderboard name.
+  return;
+}
+
+
+function setup() {
+  cnv = createCanvas(windowWidth, windowHeight);
+  imageMode(CENTER);
+  // We use HSB for the main sequence
+  colorMode(HSB, 360, 100, 100);
+  
+  // detect touch-capable devices once for generative art parameters
+  isMobile = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) && width < 767;
+  
+  // Set a move threshold for device tilt sensitivity
+  setMoveThreshold(0.5);
+
+  // Add this to prevent default touch scrolling and zooming on mobile devices.
+  cnv.elt.style.touchAction = 'none';
+  cnv.elt.addEventListener('touchmove', e => {
+    e.preventDefault();
+  }, { passive: false });
+
+  // --- Configure Pills as Interactive Buttons ---
+
+  // Pink Pill setup
+  imgPillPink.elt.onclick = () => handlePillClick('pink');
+  imgPillPink.elt.ontouchend = (e) => {
+    e.preventDefault(); // Prevent default mobile behavior
+    handlePillClick('pink');
+  };
+  imgPillPink.style('cursor', 'pointer');
+
+  // Blue Pill setup
+  imgPillBlue.elt.onclick = () => handlePillClick('blue');
+  imgPillBlue.elt.ontouchend = (e) => {
+    e.preventDefault(); // Prevent default mobile behavior
+    handlePillClick('blue');
+  };
+  imgPillBlue.style('cursor', 'pointer');
+
+  // Ensure Girl Selected GIF also plays only once
+  imgGirlSelected.elt.loop = false;
+
+  calculateDrawingBounds(); // Initial calculation of bounds
+  
+  // Initialize the first prompt
+  currentPromptType = 'initial';
+  promptStartTime = millis();
+  
+  // Pre-calculate the narrative timing structure once
+  pillNarrativeTimingData = preCalculateNarrativeTiming(PILL_NARRATIVE_TEXTS);
+  instructionNarrativeTimingData = preCalculateNarrativeTiming(INSTRUCTION_NARRATIVE_TEXTS);
+  
+  // NEW: Load and initialize high scores
+  loadHiScores();
+}
+
+// Function to request motion access for iOS 13+
+function requestMotionAccess() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+ permission request
+    DeviceOrientationEvent.requestPermission()
+      .then(permissionState => {
+        if (permissionState === 'granted') {
+          motionAccessGranted = true;
+        } else {
+          console.log('Motion sensor access denied.');
+        }
+      })
+      .catch(console.error);
+  } else {
+    // Handle non-iOS 13+ devices (where access is usually granted by default)
+    motionAccessGranted = true;
+  }
+}
+
+function handlePillClick(color) {
+  if (showGirlSelection && !isExiting) {
+    pillSelected = color;
+
+    // Force scale up immediately on touch-end to prevent mobile flicker, 
+    // ensuring the 1.2 scale is visible before the draw loop takes over for the smooth fade-out.
+    if (color === 'pink') {
+        imgPillPink.style('transform', 'scale(1.2)');
+    } else if (color === 'blue') {
+        imgPillBlue.style('transform', 'scale(1.2)');
+    }
+
+    // Start the exit animation immediately after a choice is made
+    isExiting = true;
+    exitStartTime = millis();
+
+    // JUNO FIX: Start narrative text and timer immediately when the pill is chosen
+    narrativeState = 'pill_sequence';
+    pillNarrativeStartTime = millis(); // Start the timer here
+
+    // The draw loop now handles the smooth scale transition into the exit.
+  }
+}
+
+function explodeAndRebuild() {
+    // Reset holding state immediately
+    isHolding = false;
+    holdStartTime = 0;
+    isGeneratingParticles = false; // Stop particle generation too
+
+    // Start the gradual explosion sequence
+    isExploding = true;
+    explosionStartTime = millis();
+    
+    // Reset canvas filter
+    cnv.elt.style.filter = 'none';
+}
+
+// Helper function to draw a layer with parallax shift (now includes time-based warping and opacity)
+function drawLayerWithParallax(buffer, mouseXNorm, mouseYNorm, factors, timeShiftX, timeShiftY, timeRot, opacity = 1.0, perfFactor = 1.0) {
+    
+    // Dampen time-based effects at high scores to free up rendering cycles and reduce visual choppiness
+    timeShiftX *= perfFactor;
+    timeShiftY *= perfFactor;
+    timeRot *= perfFactor; 
+
+    // Add time-based rotation to the user interaction rotation
+    let rot = mouseXNorm * factors.rot + timeRot; 
+    
+    // JUNO RECIPE FIX: Increase the magnitude of the time-based shift for a noticeable parallax effect in game mode.
+    const TIME_MOVEMENT_SCALE = 2.0; 
+    
+    // The interactive shift (mouseXNorm * factors.shift) is 0 in game mode.
+    // The time shift is now scaled by the layer's factor AND a global scale factor (2.0)
+    let shiftX = mouseXNorm * factors.shift + timeShiftX * factors.shift * TIME_MOVEMENT_SCALE; 
+    let shiftY = mouseYNorm * factors.shift + timeShiftY * factors.shift * TIME_MOVEMENT_SCALE; 
+
+    push(); 
+    // 1. Move to the center of the drawing area
+    translate(currentDrawW / 2, currentDrawH / 2);
+    
+    // 2. Apply interaction transformation
+    translate(shiftX, shiftY);
+    rotate(rot);
+    
+    // NEW: Apply opacity using tint (safer for p5.js)
+    let alpha = map(opacity, 0, 1, 0, 100); // HSB alpha range
+    tint(0, 0, 100, alpha); 
+    
+    // 3. Draw the finished art buffer, centered at the new origin (0,0)
+    image(buffer, 0, 0, currentDrawW, currentDrawH);
+    
+    // Reset tint
+    noTint();
+    pop();
+}
+
+// NEW: Function to handle the gradual fade-out of layers before rebuild
+function drawExplosionFade() {
+    let timeElapsed = millis() - explosionStartTime;
+    let t_total = constrain(timeElapsed / EXPLOSION_DURATION, 0, 1);
+    
+    // If explosion is complete, rebuild the art
+    if (t_total >= 1.0) {
+        isExploding = false;
+        initializeGenerativeArt(true); // Always regenerate art on rebuild
+        currentPromptType = 'art';
+        promptStartTime = millis();
+        return;
+    }
+    
+    // Static input for parallax during fade (all movement is now removed)
+    let mouseXNorm = 0; 
+    let mouseYNorm = 0; 
+    let timeShiftX = 0; // Static
+    let timeShiftY = 0; // Static
+    let timeRot = 0; // Static
+    
+    // Function to calculate opacity for a layer (1-6)
+    // Fades from front (L6) to back (L1) over 50% of the total duration, staggered
+    function getLayerOpacity(layerNum, t) {
+        // Map layer 6 (front) to layer 1 (back) to an index 0 to 5
+        let index = 6 - layerNum; // 6->0, 5->1, 1->5
+        
+        // Layer 6 (index 0) starts at t=0.0, Layer 1 (index 5) starts at t=0.5
+        let startT = map(index, 0, 5, 0.0, 0.5); 
+        let endT = startT + 0.5; // Fade duration is 0.5 of total time
+        
+        let opacity = map(t, startT, endT, 1.0, 0.0, true);
+        return opacity; // 1.0 to 0.0
+    }
+
+    // Calculate Orb Explosion Scale (1.0 up to 4.0, then hold/fade out)
+    const MAX_ORB_SCALE = 4.0;
+    
+    // Use an easing function (e.g., power of 2) to make the growth dramatic at the end
+    let t_scale = t_total; 
+    let orbExplosionScale = map(pow(t_scale, 2), 0, 1, 1.0, MAX_ORB_SCALE); // Use pow(t_total, 2) for dramatic end
+
+    // --- START CLIPPING ---
+    push();
+    noStroke();
+    rect(0, 0, currentDrawW, currentDrawH);
+    drawingContext.clip();
+
+    // 1. Static Background Gradient (L1 content)
+    // Draw this first, as the lines are drawn over it.
+    image(artBufferLayer1, currentDrawW / 2, currentDrawH / 2, currentDrawW, currentDrawH);
+    
+    // 2. Apply a black overlay that fades in
+    colorMode(RGB, 255);
+    noStroke();
+    // Fade the whole scene to black as it rebuilds
+    let fadeToBlackAlpha = map(t_total, 0, 1, 0, 200, true); 
+    fill(0, 0, 0, fadeToBlackAlpha);
+    rect(0, 0, currentDrawW, currentDrawH);
+    
+    // 3. Draw Layers 1 through 6 with fading opacity
+    
+    // L1 (lines only, gradient is already drawn)
+    let l1Opacity = getLayerOpacity(1, t_total);
+    drawLayerWithParallax(artBufferLayer1, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[1], timeShiftX, timeShiftY, timeRot, l1Opacity);
+
+    // L2 and L3
+    let l2Opacity = getLayerOpacity(2, t_total);
+    let l3Opacity = getLayerOpacity(3, t_total);
+    drawLayerWithParallax(artBufferLayer2, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[2], timeShiftX, timeShiftY, timeRot, l2Opacity);
+    drawLayerWithParallax(artBufferLayer3, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[3], timeShiftX, timeShiftY, timeRot, l3Opacity);
+
+    // ORB LAYER (Layer 4 timing)
+    let orbOpacity = getLayerOpacity(4, t_total);
+    
+    // Clear the particle buffer immediately (instant fade for pixie dust)
+    artBufferParticles.clear();
+    
+    // Clear the orb buffer and draw the orb only with the explosion scale
+    artBufferOrb.clear();
+    drawOrb(orbOpacity, artBufferOrb, orbExplosionScale); 
+    
+    push();
+    blendMode(SCREEN); 
+    drawLayerWithParallax(artBufferOrb, mouseXNorm, mouseYNorm, PARALLAX_FACTORS.ORB, timeShiftX, timeShiftY, timeRot, orbOpacity);
+    pop(); 
+    
+    // L4, L5, L6
+    let l4Opacity = getLayerOpacity(4, t_total);
+    let l5Opacity = getLayerOpacity(5, t_total);
+    let l6Opacity = getLayerOpacity(6, t_total);
+    drawLayerWithParallax(artBufferLayer4, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[4], timeShiftX, timeShiftY, timeRot, l4Opacity);
+    drawLayerWithParallax(artBufferLayer5, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[5], timeShiftX, timeShiftY, timeRot, l5Opacity);
+    drawLayerWithParallax(artBufferLayer6, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[6], timeShiftX, timeShiftY, timeRot, l6Opacity);
+
+    pop(); // Restores the drawing context, removing the clip
+}
+
+
+function draw() {
+  // --- JUNO FIX: Ensure the entire canvas background is black and opaque ---
+  background(0);
+    
+  // --- Initial Dimension Calculation ---
+  calculateDrawingBounds();
+  let drawW = currentDrawW;
+  let drawH = currentDrawH;
+  let offsetX = currentOffsetX;
+  let offsetY = currentOffsetY;
+  // --- End Initial Dimension Calculation ---
+
+  // --- GLOBAL PSYCHEDELIC HUE SHIFT CONTROL ---
+  // Only apply if art is finished, not exploding, and not transitioning AND NOT IN GAME MODE
+  if (showGenerativeArt && artIsFinished && !showWallOpening && !isExploding && !isGameActive && activeLayerIndex >= 1 && !isMobile) {
+      // Use a sine wave to smoothly oscillate between -30 and +30 degrees.
+      let sinVal = sin(frameCount * 0.05);
+      // Map the sine wave (-1 to 1) directly to the desired hue shift range (-30, 30)
+      let hueShift = map(sinVal, -1, 1, -30, 30); 
+      
+      // Apply CSS filter to the canvas element for global hue rotation
+      cnv.elt.style.filter = `hue-rotate(${hueShift}deg)`;
+  } else {
+      // Clear filter during all other states (initial, selection, transition, explosion, game, game over, mobile)
+      cnv.elt.style.filter = 'none';
+  }
+  // --- END HUE SHIFT CONTROL ---
+
+  // If the final sequence has started, we manage the top-most layers and skip pre-reveal layers.
+  if (showGenerativeArt) {
+    
+    push();
+    // Move the coordinate system to the top-left of the scaled art area
+    translate(currentOffsetX, currentOffsetY);
+    // Draw the art relative to this new (0, 0)
+    drawGenerativeArt();
+    
+    // Draw the interaction prompt for the art state (Only in non-game mode, and not the game instructions prompt)
+    if (artIsFinished && !showWallOpening && currentPromptType === 'art' && !isExploding && !isGameActive) {
+        drawPrompt('art', currentDrawW, currentDrawH);
+    }
+    
+    pop();
+  }
+  
+  // The narrative text drawing has been moved to a later position to ensure it is the top layer.
+  
+  // --- 2. WALL OPENING LAYER (Drawn OVER the generative art) ---
+  if (showWallOpening) {
+    let timeElapsed = millis() - wallOpeningStartTime;
+
+    // Calculate frame index based on time elapsed
+    const frameDuration = WALL_OPENING_DURATION / imgWallOpeningFrames.length;
+    wallOpeningFrameIndex = floor(timeElapsed / frameDuration);
+
+    // Constrain the frame index to the last frame
+    wallOpeningFrameIndex = constrain(wallOpeningFrameIndex, 0, imgWallOpeningFrames.length - 1);
+
+    // Draw the current frame using image()
+    let currentFrame = imgWallOpeningFrames[wallOpeningFrameIndex];
+    if (currentFrame) {
+        image(
+            currentFrame,
+            width / 2,
+            height / 2,
+            drawW,
+            drawH
+        );
+    }
+    
+    // Check if the duration for this GIF has passed
+    if (timeElapsed >= WALL_OPENING_DURATION) {
+        // Transition to the final state: Wall is done, only generative art remains
+        showWallOpening = false;
+        // Reset frame index for next time
+        wallOpeningFrameIndex = 0;
+        // showGenerativeArt remains true
+    }
+    
+    // Note: The early return is removed to allow the narrative text (below) to be drawn on top.
+  }
+
+  // --- 3. GIRL SELECTED LAYER (Precedes wall opening) ---
+  if (showGirlSelected) {
+    positionAndShowDOMImage(imgGirlSelected, drawW, drawH, offsetX, offsetY);
+    
+    // Force restart/play once when entering the state
+    if (millis() - girlSelectedStartTime < 100) {
+        imgGirlSelected.elt.src = imgGirlSelected.elt.src;
+    }
+
+    // Check if the duration for this GIF has passed
+    if (millis() - girlSelectedStartTime >= GIRL_SELECTED_DURATION) {
+        // Transition to the next state
+        showGirlSelected = false;
+        // imgGirlSelected.hide(); // Hiding handled by finalSequenceStarted block
+
+        // Start generative art (Requirement 1: Begin Art simultaneously with wall opening)
+        initializeGenerativeArt(true); // Initial art generation is always new
+        showGenerativeArt = true;
+        
+        // Start Wall Opening
+        showWallOpening = true;
+        wallOpeningStartTime = millis(); // Start timer for wall opening
+        wallOpeningFrameIndex = 0; // Reset frame index for the P5 image sequence
+        
+        // NEW: Start the Art prompt timer (or game mode prompt)
+        currentPromptType = isGameActive ? null : 'art';
+        promptStartTime = millis();
+    }
+    // Note: The early return is removed to allow the narrative text (below) and sequence control (below) to function.
+  }
+  
+  // =================================================================================
+  // JUNO FIX: Draw narrative text if narrating. This must be drawn ON TOP of
+  // wall opening and art, and must start immediately upon pill selection (handlePillClick).
+  // =================================================================================
+  if (narrativeState !== 'off') {
+    push();
+    translate(currentOffsetX, currentOffsetY); // Use currentOffsetX/Y for screen positioning
+    drawNarrativeText(currentDrawW, currentDrawH); // Use currentDrawW/H for text sizing
+    pop();
+  }
+  // =================================================================================
+
+  // If the final sequence has started, we manage the top-most layers and skip pre-reveal layers.
+  if (finalSequenceStarted) {
+
+    // Hide all selection DOM elements
+    if (imgEyeBlink) imgEyeBlink.hide();
+    if (imgPillPink) imgPillPink.hide();
+    if (imgPillBlue) imgPillBlue.hide();
+    
+    // Explicitly hide the Girl Selected GIF for robust mobile cleanup if its phase is over.
+    if (!showGirlSelected && imgGirlSelected) imgGirlSelected.hide();
+    
+    // Hide name input if final sequence started and name input is no longer needed
+    if (nameInput && !isAwaitingName) nameInput.hide();
+    
+    // Return now to prevent any pre-reveal layers (like the selection layers) from drawing.
+    return;
+  }
+  
+  // --- 4. PRE-REVEAL LAYERS (Base, Action, Selection, Pills) ---
+  
+  // --- BASE LAYERS (Only drawn if NOT in final sequence) ---
+  // Use the new flag to permanently disable the base image once the final sequence 
+  // has started, preventing any flicker.
+  if (imgBase && !finalSequenceStarted) {
+    image(
+      imgBase,
+      width / 2,
+      height / 2,
+      drawW,
+      drawH
+    );
+    
+    // Draw "Click/Tap to Start" prompt if no action has started and the prompt is active
+    if (!showGirlAction && !showGirlSelection && currentPromptType === 'initial') {
+        push();
+        translate(offsetX, offsetY);
+        drawPrompt('initial', drawW, drawH);
+        pop();
+    }
+  }
+
+  // --- Animation Logic ---
+  if (showGirlAction) {
+    // Check if the Girl-Action animation duration has passed
+    if (millis() - girlActionStartTime >= GIRL_ACTION_DURATION) {
+      showGirlAction = false;
+
+      // Only start the selection state if it hasn't started yet
+      if (!showGirlSelection) {
+        showGirlSelection = true;
+        showEyeBlink = true; // Set Eye Blink to show when Girl Selection appears
+        entranceStartTime = millis(); // Start the entrance animation timer
+      }
+    }
+  }
+
+  // Draw the Girl-Action layer if the flag is true
+  if (showGirlAction && imgGirlAction) {
+    image(
+      imgGirlAction,
+      width / 2,
+      height / 2,
+      drawW,
+      drawH
+    );
+  }
+
+  // Draw the Girl-Selection layer if the flag is true
+  if (showGirlSelection && imgGirlSelection) {
+    image(
+      imgGirlSelection,
+      width / 2,
+      height / 2,
+      drawW,
+      drawH
+    );
+    
+    // NEW: Draw the typewriter text when the selection menu is active
+    push();
+    // Translate to the offset for correct positioning relative to scaled art area
+    translate(offsetX, offsetY); 
+    drawTypewriterText(drawW, drawH, entranceStartTime);
+    pop();
+  }
+
+  // Update the DOM elements for the APNG/animated files (Entrance/Exit Logic)
+  if (showEyeBlink) {
+    let t; // Animation progress (0 to 1)
+
+    if (isExiting) {
+        // Exit animation: t goes from 1 to 0
+        let timeElapsed = millis() - exitStartTime;
+        t = 1.0 - constrain(timeElapsed / ANIMATION_DURATION, 0, 1);
+
+        if (t <= 0) {
+            // Exit complete, transition state
+            showEyeBlink = false;
+            showGirlSelection = false;
+            isExiting = false;
+            
+            // Permanently disable base image drawing
+            finalSequenceStarted = true;
+
+            // Hide all DOM elements immediately
+            imgEyeBlink.hide();
+            imgPillPink.hide();
+            imgPillBlue.hide();
+
+            // Start the full sequence for *both* pills
+            // Girl Selected -> Wall Opening -> Generative Art
+            showGirlSelected = true;
+            girlSelectedStartTime = millis(); // Start the timer for the first final GIF
+            
+            // The narrative text start time is now set in handlePillClick for earlier start.
+            
+            return; // Stop drawing DOM elements this frame and skip to the final state
+        }
+
+    } else {
+        // Entrance animation: t goes from 0 to 1
+        let timeElapsed = millis() - entranceStartTime;
+        t = constrain(timeElapsed / ANIMATION_DURATION, 0, 1);
+    }
+
+    // Scale: starts small (0.5) and grows to full (1.0)
+    let currentScale = lerp(0.5, 1.0, t);
+    // Opacity: starts transparent (0) and fades in to full (1.0)
+    let currentOpacity = t;
+
+    // Calculate the base size for the Eye Blink and Pills
+    let baseW_Eye = drawW * EYE_BLINK_SCALE;
+    let baseH_Eye = drawH * EYE_BLINK_SCALE;
+    let baseW_Pill = drawW * PILL_SCALE;
+    let baseH_Pill = drawH * PILL_SCALE;
+
+    // Apply the animated scale
+    let scaledW_Eye = baseW_Eye * currentScale;
+    let scaledH_Eye = baseH_Eye * currentScale;
+    let scaledW_Pill = baseW_Pill * currentScale;
+    let scaledH_Pill = baseH_Pill * currentScale;
+
+    // Set the opacity style
+    let opacityStyle = `opacity: ${currentOpacity};`;
+
+    // --- POP SCALE LOGIC (Handles the pill 'pop' and smooth reset) ---
+    // This logic ensures the scale transform is always managed by the draw loop, 
+    // preventing the flash/jump when transitioning to the exit state.
+    let pinkPopScale = 1.0;
+    let bluePopScale = 1.0;
+    
+    // Calculate the reset factor once if we are exiting
+    let popResetFactor = 0;
+    if (isExiting) {
+        // During exit, smoothly transition the scale from 1.2 back to 1.0 over 150ms
+        popResetFactor = constrain((millis() - exitStartTime) / 150, 0, 1); 
+    }
+
+    // Pink Pill Scale Logic
+    if (pillSelected === 'pink') {
+        if (isExiting) {
+            pinkPopScale = lerp(1.2, 1.0, popResetFactor);
+        } else {
+            pinkPopScale = 1.2;
+        }
+    }
+
+    // Blue Pill Scale Logic - EXACTLY the same structure as Pink
+    if (pillSelected === 'blue') {
+        if (isExiting) {
+            bluePopScale = lerp(1.2, 1.0, popResetFactor);
+        } else {
+            bluePopScale = 1.2;
+        }
+    }
+    // --- END POP SCALE LOGIC ---
+
+    // --- POSITIONING RELATIVE TO THE SCALED IMAGE BOUNDS ---
+    let centerX_Scaled = drawW / 4;
+
+    // 1. Eye Blink Position
+    let eyeY_Scaled = drawH / 1.8;
+
+    // Final screen coordinates: Scaled position + screen offset
+    let eyeX_Final = offsetX + centerX_Scaled - scaledW_Eye / 2;
+    let eyeY_Final = offsetY + eyeY_Scaled - scaledH_Eye / 2;
+
+    imgEyeBlink.position(eyeX_Final, eyeY_Final);
+    imgEyeBlink.size(scaledW_Eye, scaledH_Eye);
+    imgEyeBlink.style('z-index', '10');
+    imgEyeBlink.style(opacityStyle);
+    imgEyeBlink.show();
+
+    // 2. Pill Positions
+    let pillY_Scaled = drawH - (drawH / 2.5);
+
+    let pillSpacing = scaledW_Pill * 0.1; // Small space between pills
+    let pillTotalWidth = scaledW_Pill * 2 + pillSpacing;
+
+    // Pink Pill (Left)
+    let pinkPillX_Scaled = centerX_Scaled - pillTotalWidth / 2;
+    let pinkPillX_Final = offsetX + pinkPillX_Scaled;
+    let pillY_Final = offsetY + pillY_Scaled - scaledH_Pill / 2;
+
+    imgPillPink.position(pinkPillX_Final, pillY_Final);
+    imgPillPink.size(scaledW_Pill, scaledH_Pill);
+    imgPillPink.style('z-index', '10');
+    imgPillPink.style('filter', `drop-shadow(0 0 15px rgba(255, 0, 255, 0.7))`);
+    imgPillPink.style(opacityStyle);
+    imgPillPink.style('transform', `scale(${pinkPopScale})`); // Apply calculated pop scale
+    imgPillPink.show();
+
+    // Blue Pill (Right)
+    let bluePillX_Scaled = centerX_Scaled + pillTotalWidth / 2 - scaledW_Pill;
+    let bluePillX_Final = offsetX + bluePillX_Scaled;
+
+    imgPillBlue.position(bluePillX_Final, pillY_Final);
+    imgPillBlue.size(scaledW_Pill, scaledH_Pill);
+    imgPillBlue.style('z-index', '10');
+    imgPillBlue.style('filter', `drop-shadow(0 0 15px rgba(0, 255, 255, 0.7))`);
+    imgPillBlue.style('transform', `scale(${bluePopScale})`); // Apply calculated pop scale
+    imgPillBlue.style(opacityStyle);
+    imgPillBlue.show();
+
+  } else {
+    // Hide all animated DOM elements when they shouldn't be visible
+    if (imgEyeBlink) imgEyeBlink.hide();
+    if (imgPillPink) imgPillPink.hide();
+    if (imgPillBlue) imgPillBlue.hide();
+
+    // Remove glow and transform when hidden (good practice)
+    if (imgPillPink) {
+        imgPillPink.style('filter', 'none');
+        imgPillPink.style('transform', 'scale(1.0)');
+    }
+    if (imgPillBlue) {
+        imgPillBlue.style('filter', 'none');
+        imgPillBlue.style('transform', 'scale(1.0)');
+    }
+  }
+
+  // --- HUD status message (wallet / leaderboard) ---
+  if (hudMessage && Date.now() < hudMessageUntil) {
+    push();
+    // Ensure consistent colors regardless of current colorMode
+    colorMode(RGB, 255, 255, 255, 255);
+    textAlign(CENTER, CENTER);
+    textSize(18);
+    stroke(0, 0, 0, 180);
+    strokeWeight(4);
+    fill(255, 255, 255, 235);
+    text(hudMessage, width / 2, height - 42);
+    pop();
+  }
+
+}
+
+// Utility function to position and show DOM images (GIFs)
+function positionAndShowDOMImage(img, drawW, drawH, offsetX, offsetY) {
+    // Center the image within the scaled drawing area
+    let posX = offsetX;
+    let posY = offsetY;
+
+    img.position(posX, posY);
+    img.size(drawW, drawH);
+    img.style('z-index', '100'); // Ensure it's on top
+    img.style('display', 'block'); // Ensure proper block rendering 
+    // Force hardware acceleration for smoother GIF playback
+    img.style('transform', 'translateZ(0)'); 
+    img.show();
+}
+
+// ******************************************************************
+// Interaction Prompt Functions
+// ******************************************************************
+
+function drawPrompt(type, drawW, drawH) {
+    // Check if prompt is active and time has not expired
+    if (currentPromptType !== type) return;
+    
+    let timeElapsed = millis() - promptStartTime;
+    if (timeElapsed > PROMPT_DURATION) {
+        currentPromptType = null;
+        return;
+    }
+    
+    // Calculate fade alpha (fades over last 1.5s)
+    let fadeDuration = 1500;
+    let fadeStart = PROMPT_DURATION - fadeDuration;
+    let opacity;
+    if (timeElapsed < fadeStart) {
+        opacity = 1.0;
+    } else {
+        opacity = map(timeElapsed, fadeStart, PROMPT_DURATION, 1.0, 0.0);
+    }
+    
+    // Styling
+    colorMode(RGB, 255);
+    textAlign(CENTER, CENTER);
+    textFont('Arial'); 
+    
+    let promptText, secondLineText = null;
+    let glowColor, textSizeFactor, yOffsetFactor;
+
+    if (type === 'initial') {
+        textSizeFactor = 0.03;
+        // Place initial prompt slightly above center for better visual balance
+        yOffsetFactor = -0.05; 
+        
+        promptText = isMobile ? "TAP TO START" : "CLICK TO START";
+        glowColor = color(255, 0, 150, 255 * opacity); // Pink glow
+        
+        // Hover effect only for initial prompt
+        let hoverOffset = sin(frameCount * 0.05) * (drawH * 0.005);
+        yOffsetFactor += (hoverOffset / drawH);
+        
+    } else if (type === 'art') { 
+        textSizeFactor = 0.025;
+        yOffsetFactor = 0.0; // Dead center
+        
+        if (isMobile) {
+            promptText = "TAP AND HOLD TO FIRE";
+            secondLineText = "HOLD 3S TO REBUILD / HOLD TO FAST FORWARD"; // UPDATED PROMPT
+        } else {
+            promptText = "MOVE MOUSE TO EXPLORE";
+            secondLineText = "CLICK AND HOLD TO EMIT PARTICLES / HOLD 3S TO REBUILD / HOLD TO FAST FORWARD"; // UPDATED PROMPT
+        }
+        glowColor = color(0, 255, 255, 255 * opacity); // Teal/Blue glow
+    } else {
+        // Exit if not a recognized type
+        return; 
+    }
+    
+    // Position: Center of the drawing area
+    let primaryTextSize, secondaryTextSize, secondaryTextOffset;
+    let textX = drawW / 2;
+    let textY = drawH / 2 + (drawH * yOffsetFactor); // Center of primary text
+    
+    // --- 1. DETERMINE SIZES AND MEASURE WIDTH ---
+    primaryTextSize = drawW * textSizeFactor;
+
+    let maxTextWidth = 0;
+    
+    textSize(primaryTextSize); 
+    maxTextWidth = textWidth(promptText); // Start with primary text width
+
+    if (secondLineText) {
+        secondaryTextSize = drawW * 0.015;
+        secondaryTextOffset = drawH * 0.03;
+        
+        textSize(secondaryTextSize);
+        maxTextWidth = max(maxTextWidth, textWidth(secondLineText));
+    } else {
+        secondaryTextSize = 0;
+        secondaryTextOffset = 0;
+    }
+
+    // --- 2. CALCULATE BOX DIMENSIONS AND POSITION ---
+    const horizontalPadding = drawW * 0.02; 
+    const verticalPadding = drawH * 0.01; // Slightly less vertical padding
+    
+    let boxW = maxTextWidth + horizontalPadding * 2; 
+    
+    let boxH;
+    if (secondLineText) {
+        // Total text height from top of P1 to bottom of P2: 
+        // (P1_size/2) + secondaryOffset + (P2_size/2)
+        boxH = (primaryTextSize / 2) + secondaryTextOffset + (secondaryTextSize / 2) + verticalPadding * 2;
+    } else {
+        // Single line height
+        boxH = primaryTextSize + verticalPadding * 2;
+    }
+    
+    let boxX = textX - boxW / 2;
+    
+    // Calculate the top edge of the box and draw from there.
+    let boxY_start = textY - (primaryTextSize / 2) - verticalPadding;
+    
+    // --- 3. DRAW TRANSPARENT BOX ---
+    let boxOpacity = 180 * opacity; // Max 70%
+    noStroke();
+    fill(0, 0, 0, boxOpacity);
+    rect(boxX, boxY_start, boxW, boxH, 8); // Draw box with slight rounding
+    
+    // --- 4. DRAW TEXT (Reset sizes) ---
+
+    // Draw the text with glow
+    drawingContext.shadowOffsetX = 0;
+    drawingContext.shadowOffsetY = 0;
+    drawingContext.shadowBlur = 10;
+    
+    drawingContext.shadowColor = glowColor.toString(); 
+    
+    let fillAlpha = 255 * opacity;
+    fill(255, fillAlpha);
+    
+    // Primary Text
+    textSize(primaryTextSize); 
+    text(promptText, textX, textY);
+    
+    // Draw second line for applicable prompts
+    if (secondLineText) {
+        // Clear shadow for secondary text
+        drawingContext.shadowBlur = 0;
+        drawingContext.shadowColor = 'rgba(0,0,0,0)';
+        
+        textSize(secondaryTextSize);
+        fill(255, fillAlpha * 0.8);
+        text(secondLineText, textX, textY + secondaryTextOffset);
+    }
+    
+    // Clear shadow for next draw operations
+    drawingContext.shadowBlur = 0;
+    drawingContext.shadowColor = 'rgba(0,0,0,0)';
+}
+
+function drawTypewriterText(drawW, drawH, entranceStartTime) {
+    const CHAR_DURATION = TYPEWRITER_CHAR_DURATION; 
+
+    let timeElapsed = millis() - entranceStartTime;
+    
+    // Calculate the number of characters to display
+    let numChars = floor(timeElapsed / CHAR_DURATION);
+    numChars = constrain(numChars, 0, TYPEWRITER_TEXT.length);
+    
+    let displayedText = TYPEWRITER_TEXT.substring(0, numChars);
+    
+    // Calculate overall opacity, fading in with the pills (over 500ms)
+    let fadeInDuration = 500;
+    let opacity = constrain(timeElapsed / fadeInDuration, 0, 1);
+    
+    // --- Styling ---
+    push();
+    colorMode(RGB, 255);
+    textAlign(CENTER, CENTER);
+    // Use a classic monospace font for the "Matrix" aesthetic
+    textFont('Courier New', 'monospace'); 
+    
+    // Position: Center of the drawing area, shifted down to sit under the pills
+    textSize(drawW * 0.03); 
+    let textX = drawW / 2;
+    // Calculate Y position: Center of scaled area, shifted down to sit under the pills
+    // DrawH * 0.5 + DrawH * 0.3 = DrawH * 0.8 (approx 80% down the scaled area)
+    let textY = drawH / 2 + (drawH * 0.3); 
+
+    // Apply Matrix green color and glow
+    let glowColor = color(0, 255, 0, 255 * opacity);
+    let textColor = color(255, 255, 255, 255 * opacity);
+
+    // Draw the text with glow
+    drawingContext.shadowOffsetX = 0;
+    drawingContext.shadowOffsetY = 0;
+    drawingContext.shadowBlur = 10;
+    drawingContext.shadowColor = glowColor.toString(); 
+    
+    fill(textColor);
+    
+    // Draw text centered within the scaled drawing bounds
+    text(displayedText, textX, textY);
+    
+    // Clear shadow for next draw operations
+    drawingContext.shadowBlur = 0;
+    drawingContext.shadowColor = 'rgba(0,0,0,0)';
+    pop();
+}
+
+function drawNarrativeText(drawW, drawH) {
+    let timeElapsed;
+    let timingData;
+    let sequenceCompleted = false;
+
+    if (narrativeState === 'pill_sequence') {
+        timeElapsed = millis() - pillNarrativeStartTime;
+        timingData = pillNarrativeTimingData;
+        if (timeElapsed >= timingData[timingData.length - 1].fade_end) {
+            sequenceCompleted = true;
+        }
+    } else if (narrativeState === 'instruction_sequence') {
+        timeElapsed = millis() - instructionNarrativeStartTime;
+        timingData = instructionNarrativeTimingData;
+        // Check for sequence completion
+        if (timeElapsed >= timingData[timingData.length - 1].fade_end) {
+            sequenceCompleted = true;
+        }
+    } else {
+        return; // Narrative is off
+    }
+    
+    // If the sequence is completed, turn off the narrative state
+    if (sequenceCompleted) {
+        narrativeState = 'off';
+        return;
+    }
+
+    let displayedText = "";
+    let currentOpacity = 0; 
+    let currentLineIndex = -1;
+
+    // 1. Determine which line is currently active
+    for (let i = 0; i < timingData.length; i++) {
+        const data = timingData[i];
+        
+        // Check if the elapsed time is within the duration of this line's full sequence (start to fade end)
+        if (timeElapsed < data.fade_end) {
+            currentLineIndex = i;
+            
+            // --- Calculate Text and Opacity based on the current line's phase ---
+            if (timeElapsed < data.type_end) { 
+                // Phase 1: Typing
+                let timeSinceStart = timeElapsed - data.start;
+                let chars = floor(timeSinceStart / TYPEWRITER_CHAR_DURATION);
+                displayedText = data.text.substring(0, chars);
+                
+                // Fade in as it types (using the FADE_DURATION for the fade in)
+                currentOpacity = map(timeSinceStart, 0, NARRATIVE_TEXT_FADE, 0, 255, true); 
+            
+            } else if (timeElapsed < data.hold_end) { 
+                // Phase 2: Holding (Full Text)
+                displayedText = data.text;
+                currentOpacity = 255; // Full opacity
+                
+            } else {
+                // Phase 3: Fading Out (From hold_end to fade_end)
+                displayedText = data.text;
+                currentOpacity = map(timeElapsed, data.hold_end, data.fade_end, 255, 0); 
+            }
+            break; // Found the active line, exit loop
+        }
+    }
+    
+    if (currentLineIndex === -1) {
+        // Should be caught by sequenceCompleted check above, but for safety:
+        narrativeState = 'off'; // Stop narrating when finished
+        return;
+    }
+
+    // --- Styling ---
+    push();
+    colorMode(RGB, 255);
+    textAlign(CENTER, CENTER);
+    textFont('Courier New', 'monospace'); 
+    
+    // 1. Set font size *first* so textWidth works correctly
+    const fontSize = drawW * 0.03;
+    textSize(fontSize); 
+    
+    let textX = drawW / 2;
+    // Y position: Center of scaled area, shifted down to sit under the pills' previous location
+    let textY = drawH / 2 + (drawH * 0.3); 
+    
+    // If this is the instruction sequence, position it higher (near the top)
+    if (narrativeState === 'instruction_sequence') {
+        textY = drawH * 0.15 + (currentLineIndex * fontSize * 1.5); // Stacked at the top
+    }
+
+    // 1. Draw Transparent Black Background Box (Contrast Box)
+    if (displayedText.length > 0) {
+        let boxOpacity = map(currentOpacity, 0, 255, 0, 180); // Max 180 (70% opacity)
+        let boxColor = color(0, 0, 0, boxOpacity);
+        
+        // Dynamic width: text width + padding
+        let text_width = textWidth(displayedText);
+        
+        // Define padding relative to the font size
+        const horizontalPadding = fontSize * 1.0; // 100% of font size total (50% on each side)
+        const verticalPadding = fontSize * 0.5; // 50% of font size total (25% on top/bottom)
+
+        let boxW = text_width + horizontalPadding; 
+        let boxH = fontSize + verticalPadding;
+        
+        // Ensure minimum width for early typing stages
+        boxW = max(boxW, drawW * 0.1); 
+        
+        // Center the text vertically within the box for single line
+        let boxY = textY - boxH / 2;
+        
+        noStroke();
+        fill(boxColor);
+        // Centered, rounded box
+        rect(textX - boxW / 2, boxY, boxW, boxH, 10); 
+    }
+
+    // 2. Draw Text with Glow
+    
+    // Matrix green color and glow (or Yellow for instructions)
+    let glowAlpha = map(currentOpacity, 0, 255, 0, 255);
+    let glowColor;
+    if (narrativeState === 'instruction_sequence') {
+        glowColor = color(255, 255, 0, glowAlpha); // Yellow for instructions
+    } else {
+        glowColor = color(0, 255, 0, glowAlpha); // Green for narrative
+    }
+    let textColor = color(255, 255, 255, currentOpacity);
+
+    // Set up glow
+    drawingContext.shadowOffsetX = 0;
+    drawingContext.shadowOffsetY = 0;
+    drawingContext.shadowBlur = 10;
+    drawingContext.shadowColor = glowColor.toString(); 
+    
+    fill(textColor);
+
+    // Text size is already set above
+    text(displayedText, textX, textY);
+    
+    // Clear shadow
+    drawingContext.shadowBlur = 0;
+    drawingContext.shadowColor = 'rgba(0,0,0,0)';
+    pop();
+}
+
+function drawOrb(opacityFactor, target, scale = 1.0) {
+    if (!orbData || !orbBaseColor) return; // Safety check
+    
+    let t = target;
+    t.push();
+    t.colorMode(HSB, 360, 100, 100);
+    t.noStroke();
+    
+    // 1. Calculate Pulse (for non-damage state)
+    let pulseTime = millis() * ORB_PULSE_FREQUENCY;
+    let pulse = 1.0 + sin(pulseTime) * ORB_PULSE_AMPLITUDE; // 1.0 +/- 0.3
+    
+    // 2. Calculate Damage Flash (Reduces pulse scale to 1.0 and adds red glow)
+    let damageFlashFactor = 1.0;
+    const DAMAGE_DURATION = 300; // 300ms flash duration
+    if (millis() - orbDamageTime < DAMAGE_DURATION) {
+        let t_damage = (millis() - orbDamageTime) / DAMAGE_DURATION;
+        // Fade damage factor from 1.0 (full red) to 0.0 (normal color)
+        damageFlashFactor = 1.0 - t_damage;
+        // Dampen the regular pulse while flashing
+        pulse = lerp(pulse, 1.0, 0.5); 
+    }
+
+    // 3. Final Size Calculation
+    let baseSize = orbData.size * pulse * scale; // Apply pulse and explosion scale
+    
+    // 4. Base Color (Glow Effect)
+    let h = hue(orbBaseColor);
+    let s = saturation(orbBaseColor);
+    let b = brightness(orbBaseColor);
+    
+    // Global opacity factor (0.0 to 1.0) applied to alpha (0-100)
+    let alpha = opacityFactor * 100;
+
+    // Draw multiple layers for a soft glow effect
+    t.blendMode(ADD); // Use ADD for the glow layers
+    for (let i = 0; i < 5; i++) {
+        let currentSize = baseSize + i * 5 * scale; // Scale the glow size based on overall scale
+        let currentAlpha = alpha * map(i, 0, 4, 0.3, 0.05); // Fade alpha out
+        
+        t.fill(h, s, b, currentAlpha);
+        t.ellipse(orbData.x, orbData.y, currentSize, currentSize);
+    }
+    t.blendMode(BLEND); // Back to blend mode for the core
+
+    // 5. Draw the solid core
+    // Core has a high brightness, high opacity
+    t.fill(h, s * 0.5, b, alpha); // Slightly less saturation for the core
+    let coreSize = baseSize * 0.8;
+    t.ellipse(orbData.x, orbData.y, coreSize, coreSize);
+    
+    // 6. Damage Flash Overlay
+    if (damageFlashFactor > 0) {
+        // Red color (HSB 0, 100, 100)
+        let damageColor = t.color(0, 100, 100, damageFlashFactor * 100);
+        
+        // Draw a small, fading red core over the top
+        t.blendMode(ADD); 
+        t.fill(damageColor);
+        t.ellipse(orbData.x, orbData.y, coreSize * 0.5, coreSize * 0.5);
+        t.blendMode(BLEND); 
+    }
+    
+    t.pop();
+}
+
+
+// ******************************************************************
+// Generative Art Setup (Line Attractor)
+// ******************************************************************
+
+function generateOrbData() {
+    // Size is relative to the width of the drawing area
+    let orbSize = random(currentDrawW * 0.05, currentDrawW * 0.15); 
+    
+    let orbY;
+    if (isMobile) {
+        // Center the orb vertically on mobile for consistent interaction
+        orbY = currentDrawH / 2;
+    } else {
+        // Location on the center line (random Y) for desktop
+        orbY = random(currentDrawH * 0.2, currentDrawH * 0.8); 
+    }
+
+    orbData = {
+        x: currentDrawW / 2, // Always vertical center line
+        y: orbY,
+        size: orbSize,
+        // color: orbColor is no longer needed, using global orbBaseColor
+        layerIndexStart: 0, // Will store the line index where the orb should appear (start of L4)
+        layerIndexEnd: 0 // Will store the line index where L4 ends
+    };
+}
+
+function initializeGenerativeArt(regenerateArt = true) {
+  // Global color mode remains HSB (set in setup)
+  
+  // Ensure we have the latest bounds before generating data
+  calculateDrawingBounds();
+  
+  // 1. Create or resize the seven buffers (6 line layers + 1 orb layer + 1 particle layer)
+  if (!artBufferLayer1 || artBufferLayer1.width !== currentDrawW || artBufferLayer1.height !== currentDrawH) {
+    artBufferLayer1 = createGraphics(currentDrawW, currentDrawH);
+    artBufferLayer2 = createGraphics(currentDrawW, currentDrawH);
+    artBufferLayer3 = createGraphics(currentDrawW, currentDrawH);
+    artBufferLayer4 = createGraphics(currentDrawW, currentDrawH);
+    artBufferLayer5 = createGraphics(currentDrawW, currentDrawH);
+    artBufferLayer6 = createGraphics(currentDrawW, currentDrawH); 
+    artBufferOrb = createGraphics(currentDrawW, currentDrawH); // Orb Buffer
+    artBufferParticles = createGraphics(currentDrawW, currentDrawH); // NEW Particle Buffer
+  }
+  
+  // 2. Configure and clear all buffers
+  const buffers = [artBufferLayer1, artBufferLayer2, artBufferLayer3, artBufferLayer4, artBufferLayer5, artBufferLayer6, artBufferOrb, artBufferParticles]; // UPDATED
+  
+  if (regenerateArt) {
+      for (let buffer of buffers) {
+          buffer.clear(); // Clear all buffers to start fresh drawing
+          // FIX: Set color mode to HSB to match the main context and prevent red lines from HSB-to-RGB conversion errors
+          buffer.colorMode(HSB, 360, 100, 100); 
+          buffer.noFill();
+          buffer.imageMode(CENTER);
+      }
+      
+      // 3. Draw the background gradient ONLY to the first (back) buffer
+      drawSkyGradient(artBufferLayer1); 
+      
+      // Reset line data and counters
+      lineData = [];
+      currentLine = 0; 
+      
+      // Randomize the number of lines between 50 and 150 (inclusive)
+      totalLines = floor(random(50, MAX_LINES_LIMIT + 1));
+      
+      // Reset completion flag
+      artIsFinished = false; 
+      // Reset the background flag so the gradient is drawn again
+      artBackgroundDrawn = false; 
+      
+      // Select new colors and set orbBaseColor
+      selectThreeColors(); // Runs in global HSB mode and stores HSB colors
+      
+      // NEW: Generate orb data before line data so line data can set the insertion index
+      generateOrbData(); 
+      
+      // Generate new line data
+      generateLineData(totalLines);
+      
+  } else {
+      // If NOT regenerating art (i.e., retrying):
+      // The line buffers (L1-L6) are NOT cleared, preserving the art.
+      // We only need to clear the dynamic buffers.
+      artBufferOrb.clear();
+      artBufferParticles.clear();
+      
+      // The art is already finished in this case.
+      artIsFinished = true; 
+      artBackgroundDrawn = true; 
+      
+      // Remove name input element if it exists
+      if (nameInput) {
+          nameInput.remove();
+          nameInput = null;
+      }
+  }
+  
+  // Set up drawing styles
+  noFill();
+  frameRate(30);
+  loop(); // Ensure the draw loop is running
+  
+  // --- Initialize Game State (RUNS ALWAYS) ---
+  isGameActive = true; 
+  spaceships = [];
+  powerUps = []; // NEW: Reset power-up array
+  lastPowerUpSpawnTime = 0; // NEW: Reset spawn time
+  // enemyProjectiles array is now removed
+  layerOpacities = [0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]; 
+  layerHealth = [0, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX, LAYER_HEALTH_MAX];
+  activeLayerIndex = 6;
+  score = 0;
+  orbDamageTime = 0; // Reset damage time
+  lastHitScore = 0; // NEW: Reset last hit score
+  scoreMultiplier = 1.0; // NEW: Reset multiplier
+  nextRewardThreshold = 100; // NEW: Reset reward threshold
+  
+  // FIX: Set Ammo Variables to their fixed base values
+  maxAmmoTime = SHOOTING_DURATION; 
+  currentRechargeDuration = BASE_RECHARGE_DURATION; 
+  currentAmmoTime = maxAmmoTime; // Reset ammo
+  isWeaponAvailable = true; // Reset weapon state
+  
+  gameplayPerformanceFactor = 1.0; // Reset performance factor
+  particles = []; // Clear particles on new art generation
+  killStreak = 0; // NEW: Reset kill streak
+  instantPowerRegenActive = false; // NEW: Reset kill streak power boost
+  powerUpAmmoBoostActive = false; // NEW: Reset power-up ammo boost
+  ammoBoostEndTime = 0; // NEW: Reset boost timer
+  isNewHighScore = false; // RESET NEW HI SCORE FLAG
+  isAwaitingName = false; // RESET AWAITING NAME FLAG
+  // --- End Initialize Game State ---
+}
+
+// ******************************************************************
+// Generative Art Helper Functions
+// ******************************************************************
+
+// Updated to accept a target (p5 or p5.Graphics)
+function drawSkyGradient(target) {
+    let t = target || this; // Use target if provided, otherwise default to main p5 context
+    
+    // Fill the entire buffer with solid black (0, 0, 0). 
+    // The buffer's mode is set to HSB in initializeGenerativeArt, so HSB(0,0,0) is black.
+    t.background(0);
+}
+
+function selectThreeColors() {
+    // Global color mode is HSB here, so palette stores HSB color objects.
+    let activeFullPalette;
+
+    if (pillSelected === 'blue') {
+        activeFullPalette = [...fullPaletteBlue]; // Copy the array
+        palette = []; // Start empty for blue
+        
+        // Pick 3 unique random colors from the blue palette
+        for (let i = 0; i < 3; i++) {
+            if (activeFullPalette.length > 0) {
+                let randomIndex = floor(random(activeFullPalette.length));
+                palette.push(color(activeFullPalette[randomIndex]));
+                activeFullPalette.splice(randomIndex, 1); // Remove the picked color
+            }
+        }
+        orbBaseColor = color('#06a9ff'); // Bright Blue for the orb
+        particleBaseColor = orbBaseColor; // Particles are blue too
+    } else { // Defaults to 'pink' or null
+        activeFullPalette = fullPalettePink;
+        // Start with the required pink color
+        palette = [color('#ff91af')];
+        
+        // Create a temporary list of remaining colors
+        let remainingColors = activeFullPalette.filter(c => c !== '#ff91af');
+        
+        // Pick 2 more unique colors from the remaining list
+        for (let i = 0; i < 2; i++) {
+            if (remainingColors.length > 0) {
+                let randomIndex = floor(random(remainingColors.length));
+                palette.push(color(remainingColors[randomIndex]));
+                remainingColors.splice(randomIndex, 1); // Remove the picked color
+            }
+            }
+        orbBaseColor = color('#ff0660'); // Bright Pink/Magenta for the orb
+        // HSB White is Hue 0, Saturation 0, Brightness 100
+        particleBaseColor = color(0, 0, 100); // Particles are white
+    }
+}
+
+function generateLineData(numOfLines) {
+    let baseMaxWeight; 
+    let curveOffsetFactor; 
+
+    // Apply mobile-specific generative art parameters
+    if (isMobile) {
+        // Increased max weight and curve factor for better variation on mobile
+        baseMaxWeight = 20; 
+        curveOffsetFactor = 5; 
+    } else {
+        // Desktop parameters - Harmonized with mobile for performance
+        baseMaxWeight = 20; 
+        curveOffsetFactor = 5; 
+    }
+
+    // Determine the full palette to use for the outline color randomization
+    const outlinePalette = pillSelected === 'blue' ? fullPaletteBlue : fullPalettePink;
+    
+    // --- Calculate layer distribution for 6 layers ---
+    
+    // Layer 6 gets the last 5 lines.
+    const lastLayerCount = min(5, numOfLines); 
+    const linesForLayers1to5 = numOfLines - lastLayerCount;
+    
+    let l1to5PerLayer = 0;
+    let l5Remainder = 0;
+    
+    if (linesForLayers1to5 > 0) {
+        // Distribute remaining lines evenly among Layers 1-5
+        l1to5PerLayer = floor(linesForLayers1to5 / 5);
+        l5Remainder = linesForLayers1to5 % 5;
+    }
+    
+    // Calculate the end index for each layer (exclusive)
+    let layer1End = l1to5PerLayer;
+    let layer2End = layer1End + l1to5PerLayer;
+    let layer3End = layer2End + l1to5PerLayer;
+    let layer4End = layer3End + l1to5PerLayer;
+    let layer5End = layer4End + l1to5PerLayer + l5Remainder; // Layer 5 takes the remainder
+    let layer6Start = layer5End; // Start of the last 5 lines
+
+    // Store the layer start/end indices for the orb's gradual appearance
+    if (orbData) {
+        orbData.layerIndexStart = layer3End; // Start of Layer 4
+        orbData.layerIndexEnd = layer4End;   // End of Layer 4
+    }
+
+    for (let i = 0; i < numOfLines; i++) {
+        let currentLayer;
+        // Assign layer based on generation index
+        if (i < layer1End) {
+            currentLayer = 1; // Back layer
+        } else if (i < layer2End) {
+            currentLayer = 2; // Layer 2
+        } else if (i < layer3End) {
+            currentLayer = 3; // Layer 3
+        } else if (i < layer4End) {
+            currentLayer = 4; // Layer 4
+        } else if (i < layer5End) {
+            currentLayer = 5; // Layer 5
+        } else {
+            currentLayer = 6; // Extreme front layer (the last 5 lines)
+        }
+        
+        // Use currentDrawW and currentDrawH for all spatial randomization
+        let startX = random(currentDrawW / 16, currentDrawW / 2);
+        let startY = random(currentDrawH);
+        let endX = currentDrawW / 2;
+        let endY = random(currentDrawH);
+        
+        let lineColor;
+        let maxWeight;
+        
+        let isGlowing = random() < 0.05; // 5% chance for a line to be glowing
+        let hasOutline = random() < 0.10; // 10% chance for a line to have a colored outline
+        // 25% chance for OVERLAY blend mode, but only if the line is not glowing (to avoid conflicting modes)
+        let blendModeOverlay = !isGlowing && (random() < 0.25); 
+        
+        // NEW: Solid line logic (less common than gradients, about 15% chance)
+        let isSolidColor = random() < 0.15; 
+        // Pre-calculate the solid color from the palette
+        let solidColor = isSolidColor ? palette[floor(random(palette.length))] : null;
+        
+        lineColor = palette[floor(random(palette.length))]
+        maxWeight = random(4, baseMaxWeight); // Use the conditional max weight
+        
+        // Outline can be any color from the active full palette (created as HSB color object)
+        let outlineColor = hasOutline ? color(outlinePalette[floor(random(outlinePalette.length))]) : null;
+
+        let segments = 100;
+
+        lineData.push({
+            startX: startX,
+            startY: startY,
+            endX: endX,
+            endY: endY,
+            // Store randomized offsets for the curve's unique shape, scaled to the drawing area
+            curveOffset1X: random(-currentDrawW / curveOffsetFactor, currentDrawW / curveOffsetFactor),
+            curveOffset1Y: random(-currentDrawH / curveOffsetFactor, currentDrawH / curveOffsetFactor),
+            curveOffset2X: random(-currentDrawW / curveOffsetFactor, currentDrawW / curveOffsetFactor),
+            curveOffset2Y: random(-currentDrawH / curveOffsetFactor, currentDrawH / curveOffsetFactor),
+            color: lineColor,
+            maxWeight: maxWeight,
+            segments: segments,
+            currentSegment: 0,
+            isGlowing: isGlowing, 
+            hasOutline: hasOutline, 
+            outlineColor: outlineColor, 
+            blendModeOverlay: blendModeOverlay, // New property for OVERLAY mode
+            layer: currentLayer, // Assign the layer
+            isSolidColor: isSolidColor, // NEW
+            solidColor: solidColor // NEW
+        });
+    }
+}
+
+// Updated to draw to the correct buffer based on lineData.layer
+function drawLineSegment(index) {
+    let data = lineData[index];
+    let i = data.currentSegment;
+    
+    // Determine the correct buffer for the current line
+    let target;
+    if (data.layer === 1) target = artBufferLayer1;
+    else if (data.layer === 2) target = artBufferLayer2;
+    else if (data.layer === 3) target = artBufferLayer3;
+    else if (data.layer === 4) target = artBufferLayer4;
+    else if (data.layer === 5) target = artBufferLayer5;
+    else target = artBufferLayer6; // Layer 6
+    
+    // Conditional weight scale for mobile
+    let weightScale = isMobile ? 0.5 : 1.0; 
+
+    if (i < data.segments) {
+        let t0 = i / data.segments;
+        let t1 = (i + 1) / data.segments;
+        
+        let mainLineColor;
+
+        if (data.isSolidColor) {
+            // If solid, use the pre-calculated color for every segment
+            mainLineColor = data.solidColor;
+        } else {
+            // --- Palette-Based Dynamic Color Cycling (Gradient) ---
+            // Uses t0 (0 to 1) for position along the line to create a gradient 
+            // that cycles through the three selected palette colors over time.
+            
+            // 1. Determine the time-based color sequence shift
+            const cycleSpeed = 30; // Change color sequence every 30 frames
+            const startIndex = floor(frameCount / cycleSpeed) % palette.length;
+
+            // 2. Define the three sequential colors from the palette
+            let c1 = palette[startIndex]; // Start color
+            let c2 = palette[(startIndex + 1) % palette.length]; // Middle color
+            let c3 = palette[(startIndex + 2) % palette.length]; // End color
+
+            if (t0 < 0.5) {
+                // Interpolate from c1 to c2
+                let t = map(t0, 0, 0.5, 0, 1);
+                mainLineColor = lerpColor(c1, c2, t);
+            } else {
+                // Interpolate from c2 to c3
+                let t = map(t0, 0.5, 1.0, 0, 1);
+                mainLineColor = lerpColor(c2, c3, t);
+            }
+            // --- END Palette-Based Dynamic Color Cycling ---
+        }
+
+        // NEW: Stroke Weight Fluctuation (Trippy Element 1)
+        const weightWobble = sin(frameCount * 0.5 + index * 0.1) * 0.5; // Subtle wobble based on time and line index
+        // Apply weightScale to the calculated stroke weight
+        let sw = (lerp(0.5, data.maxWeight, sin(PI * t0)) * weightScale) + weightWobble;
+
+        // 1. Calculate Mouse Influence on Curvature (uses mouseX from main p5 context)
+        let mappedMouseX = constrain(mouseX, currentOffsetX, currentOffsetX + currentDrawW);
+        // Parallax is now removed, so curveInfluence is always 0 in game mode.
+        let curveInfluence = 0; 
+        
+        // 2. Define Control Points dynamically
+        let control1X = lerp(data.startX, data.endX, 0.25) + data.curveOffset1X + curveInfluence;
+        let control1Y = data.startY + data.curveOffset1Y;
+        let control2X = lerp(data.startX, data.endX, 0.75) + data.curveOffset2X + curveInfluence;
+        let control2Y = data.endY + data.curveOffset2Y;
+
+        // Calculate points for the current segment
+        let p0 = target.bezierPoint(data.startX, control1X, control2X, data.endX, t0);
+        let p1 = target.bezierPoint(data.startX, control1X, control2X, data.endX, t1);
+        let q0 = target.bezierPoint(data.startY, control1Y, control2Y, data.endY, t0);
+        let q1 = target.bezierPoint(data.startY, control1Y, control2Y, data.endY, t1);
+        
+        // NEW: Coordinate Jitter (Trippy Element 2)
+        const jitterAmount = 1.5 * weightScale; // Scale jitter down on mobile
+        let jX = random(-jitterAmount, jitterAmount);
+        let jY = random(-jitterAmount, jitterAmount); 
+        
+        p0 += jX; p1 += jX;
+        q0 += jY; q1 += jY;
+
+        // Constrain all segment points to the drawing area.
+        p0 = constrain(p0, 0, currentDrawW / 2);
+        p1 = constrain(p1, 0, currentDrawW / 2);
+        q0 = constrain(q0, 0, currentDrawH);
+        q1 = constrain(q1, 0, currentDrawH);
+
+        // 3. Set Blend Mode for this segment's drawing
+        if (data.isGlowing) {
+            target.blendMode(ADD); // Highest priority: ADD for glow
+        } else if (data.blendModeOverlay) {
+            target.blendMode(OVERLAY);
+        } else {
+            target.blendMode(BLEND);
+        }
+
+        // 4. Draw Glow (if ADD is active)
+        if (data.isGlowing) {
+            for (let j = 0; j < 4; j++) {
+                // Since the target buffer is now HSB, the color object is correctly interpreted.
+                let glowColor = color(hue(mainLineColor), saturation(mainLineColor), brightness(mainLineColor)); 
+                
+                // Alpha mapping for HSB mode (0-100)
+                glowColor.setAlpha(map(j, 0, 3, 50, 5)); 
+                target.stroke(glowColor);
+                target.strokeWeight(sw + j * 2 * weightScale); 
+                
+                target.line(p0, q0, p1, q1);
+                target.line(currentDrawW - p0, q0, currentDrawW - p1, q1); // Mirrored line using currentDrawW
+            }
+        }
+
+        // 5. Draw Outline (if active)
+        if (data.hasOutline) {
+            target.stroke(data.outlineColor);
+            target.strokeWeight(sw + 2 * weightScale); 
+            
+            target.line(p0, q0, p1, q1);
+            target.line(currentDrawW - p0, q0, currentDrawW - p1, q1); // Mirrored line using currentDrawW
+        }
+
+        // 6. Draw Main Line
+        target.stroke(mainLineColor);
+        target.strokeWeight(sw);
+        
+        target.line(p0, q0, p1, q1);
+        target.line(currentDrawW - p0, q0, currentDrawW - p1, q1); // Mirrored line using currentDrawW
+        
+        // 7. Reset Blend Mode for the environment/next segment
+        target.blendMode(BLEND); 
+        
+        data.currentSegment++;
+    }
+}
+
+// ******************************************************************
+// Spaceship System Implementation (NEW)
+// ******************************************************************
+
+class Spaceship {
+    constructor(currentScore) { // ACCEPT SCORE
+        // Spawn from a random edge (0=top, 1=right, 2=bottom, 3=left)
+        let edge = floor(random(4));
+        
+        if (edge === 0) { // Top
+            this.pos = createVector(random(currentDrawW), -20);
+        } else if (edge === 1) { // Right
+            this.pos = createVector(currentDrawW + 20, random(currentDrawH));
+        } else if (edge === 2) { // Bottom
+            this.pos = createVector(random(currentDrawW), currentDrawH + 20);
+        } else { // Left
+            this.pos = createVector(-20, random(currentDrawH));
+        }
+        
+        // Base speed calculation: FIXED TO INITIAL STATE
+        let baseSpeed = random(1.0, 1.8); 
+        
+        this.size = random(8, 15);
+        this.speed = baseSpeed; // FIXED SPEED (no multiplier)
+        
+        // Health scaling: FIXED TO INITIAL STATE
+        this.health = 1; // FIXED HEALTH
+        
+        this.color = color(255, 0, 0); // Red ships in RGB mode
+        
+        // Target is the orb center
+        this.target = createVector(orbData.x, orbData.y);
+        this.vel = p5.Vector.sub(this.target, this.pos).normalize().mult(this.speed);
+        
+        // NEW Irregular Movement / Dodging setup (Scales with score)
+        this.noiseOffset = random(1000); // Unique noise offset for each ship
+        this.baseDodgeForce = 0.0; 
+        this.dodgeForce = this.baseDodgeForce; // FIXED DODGE FORCE
+
+        // Enemy Shooting Cooldown (Disabled in runGameLoop, but kept for consistency)
+        this.shootCooldown = random(120, 180); // 4-6 seconds cooldown in frames
+        this.lastShotTime = frameCount;
+    }
+
+    update() {
+        // --- Continuous Steering Force (Always towards the Core) ---
+        let desired = p5.Vector.sub(this.target, this.pos);
+        desired.normalize(); // Now a unit vector pointing to the core
+        
+        // Use a fixed, small steering strength to ensure the core pull is persistent but subtle
+        const STEERING_STRENGTH = 0.05; 
+        desired.mult(this.speed * STEERING_STRENGTH); // Scale by speed and a small factor
+        
+        // Add the steering force to the current velocity
+        this.vel.add(desired);
+        
+        // 1. Calculate Perpendicular Noise Force (Irregular Movement/Dodging)
+        let perp = this.vel.copy().rotate(HALF_PI); // Vector perpendicular to current velocity
+        
+        // Use noise to generate a smooth, continuous wiggle (e.g., -1 to 1)
+        let noiseFactor = map(noise(this.noiseOffset, frameCount * 0.05), 0, 1, -1, 1);
+        
+        // Scale the perpendicular vector by the noise factor and the scaled dodge force
+        // dodgeForce is fixed to 0.0 to maintain smooth, direct movement.
+        perp.setMag(noiseFactor * this.dodgeForce * this.speed); 
+        
+        // 2. Add the perpendicular force to velocity
+        this.vel.add(perp);
+        
+        // 3. Limit and Re-normalize velocity to maintain constant overall speed
+        this.vel.limit(this.speed); // Ensure speed doesn't exceed base speed
+        this.vel.setMag(this.speed); // Force the velocity to maintain the set speed
+        
+        // --- JUNO FIX: Scale movement by deltaTime for frame-rate independence ---
+        const speedFactor = deltaTime / (1000 / 60); 
+        this.pos.add(this.vel.copy().mult(speedFactor));
+        
+        this.noiseOffset += 0.01; // Advance noise timeline
+
+        // 4. Enemy shooting logic (DISABLED to enforce sub-50 score experience)
+        // if (false) { ... }
+    }
+
+    display(target) {
+        let t = target;
+        t.push();
+        t.colorMode(RGB, 255);
+        
+        // Draw glow effect for visibility
+        t.drawingContext.shadowOffsetX = 0;
+        t.drawingContext.shadowOffsetY = 0;
+        t.drawingContext.shadowBlur = 25; // Increased blur for stronger glow
+        t.drawingContext.shadowColor = 'rgba(255, 0, 0, 1.0)'; // Increased alpha to 1.0
+        
+        // NEW: White Outline
+        t.stroke(255); // White stroke
+        t.strokeWeight(2); // 2px thickness
+        
+        t.fill(255, 0, 0); // Bright Red
+        
+        // Simple triangle pointing towards the orb
+        t.translate(this.pos.x, this.pos.y);
+        t.rotate(this.vel.heading() + HALF_PI); // Rotate triangle to face direction of travel
+        t.triangle(
+            -this.size / 2, this.size / 2,
+            this.size / 2, this.size / 2,
+            0, -this.size / 2
+        );
+        
+        t.drawingContext.shadowBlur = 0;
+        t.pop();
+    }
+    
+    // Checks if the ship has reached the orb (collision with orb)
+    checkOrbCollision() {
+        let orbCenter = createVector(orbData.x, orbData.y);
+        let distSq = p5.Vector.dist(this.pos, orbCenter);
+        // Collision distance is orb radius + ship size
+        return distSq < (orbData.size / 2 + this.size);
+    }
+    
+    // NEW: Method to take damage
+    takeDamage() {
+        this.health--;
+        return this.health <= 0;
+    }
+}
+
+// AdvancedSpaceship class removed to enforce fixed difficulty.
+// EnemyProjectile class removed to enforce fixed difficulty.
+
+// ******************************************************************
+// Power-Up System Implementation (NEW)
+// ******************************************************************
+
+class PowerUp {
+    constructor(type) {
+        this.type = type; // 'shield' or 'ammo'
+        this.size = POWERUP_SIZE;
+        this.speed = POWERUP_SPEED;
+        
+        // Spawn from a random edge (0=top, 1=right, 2=bottom, 3=left)
+        let edge = floor(random(4));
+        if (edge === 0) { // Top
+            this.pos = createVector(random(currentDrawW), -20);
+        } else if (edge === 1) { // Right
+            this.pos = createVector(currentDrawW + 20, random(currentDrawH));
+        } else if (edge === 2) { // Bottom
+            this.pos = createVector(random(currentDrawW), currentDrawH + 20);
+        } else { // Left
+            this.pos = createVector(-20, random(currentDrawH));
+        }
+        
+        // Target is the orb center
+        this.target = createVector(orbData.x, orbData.y);
+        this.vel = p5.Vector.sub(this.target, this.pos).normalize().mult(this.speed);
+    }
+    
+    update() {
+        // Power-ups move very slowly towards the core
+        const speedFactor = deltaTime / (1000 / 60); 
+        this.pos.add(this.vel.copy().mult(speedFactor));
+    }
+    
+    display(target) {
+        let t = target;
+        t.push();
+        t.colorMode(RGB, 255);
+        t.noStroke();
+        
+        let colorA, colorB, symbol;
+        
+        if (this.type === 'shield') {
+            // Restore layer/health (Green)
+            colorA = t.color(0, 255, 0); 
+            colorB = t.color(0, 100, 0);
+            symbol = '+';
+        } else { 
+            // Ammo boost (Yellow)
+            colorA = t.color(255, 255, 0); 
+            colorB = t.color(100, 100, 0);
+            symbol = 'P'; // Power
+        }
+        
+        // Draw the outer pulsating glow
+        let pulse = t.map(t.sin(t.frameCount * 0.1), -1, 1, 0, 15);
+        t.drawingContext.shadowOffsetX = 0;
+        t.drawingContext.shadowOffsetY = 0;
+        t.drawingContext.shadowBlur = 10 + pulse;
+        t.drawingContext.shadowColor = colorA.toString();
+        
+        // Draw main body (circle)
+        t.fill(colorA);
+        t.ellipse(this.pos.x, this.pos.y, this.size, this.size);
+        
+        // Draw a smaller circle with background color for a ring effect
+        t.fill(colorB);
+        t.ellipse(this.pos.x, this.pos.y, this.size * 0.5, this.size * 0.5);
+        
+        // Draw symbol
+        t.textAlign(t.CENTER, t.CENTER);
+        t.textSize(this.size * 0.8);
+        t.fill(0); // Black symbol
+        t.text(symbol, this.pos.x, this.pos.y + 1); 
+        
+        t.drawingContext.shadowBlur = 0;
+        t.pop();
+    }
+    
+    // Removed checkOrbCollision() as powerups are now activated by being shot.
+}
+
+function applyPowerUpEffect(type) {
+    if (type === 'shield') {
+        // Find the lowest integrity layer (Layer 1 is lowest index)
+        let layerToRepair = -1;
+        
+        // Iterate from back (L1) to front (L6)
+        for(let i = 1; i <= 6; i++) {
+            if (layerHealth[i] < LAYER_HEALTH_MAX) {
+                layerToRepair = i;
+                break; // Found the lowest damaged layer
+            }
+        }
+        
+        if (layerToRepair !== -1) {
+            // Repair the layer
+            layerHealth[layerToRepair]++;
+            layerOpacities[layerToRepair] = 1.0; // Ensure it's visible again
+        } else {
+            // If all layers are max health, give a small score bonus
+            score += 50; 
+        }
+
+    } else if (type === 'ammo') {
+        // Reset ammo and trigger the timed instant regen boost
+        currentAmmoTime = maxAmmoTime;
+        isWeaponAvailable = true;
+        powerUpAmmoBoostActive = true; // Use the new flag
+        ammoBoostEndTime = millis() + AMMO_BOOST_DURATION;
+    }
+}
+
+// ******************************************************************
+// Particle System Implementation (MODIFIED for Projectile)
+// ******************************************************************
+
+class Particle {
+    constructor(x, y, targetX, targetY, isOmni = false) { // MODIFIED: Accepts isOmni flag
+        this.pos = createVector(x, y);
+        
+        // Calculate velocity vector pointing from spawn (orb) to target (mouse/touch)
+        let target = createVector(targetX, targetY);
+        // Changed speed from (8, 15) to (10, 20) for faster projectiles
+        let speed = random(10, 20); 
+
+        let directionVector;
+        
+        if (isOmni) {
+            // Omni-directional blast: Random angle
+            directionVector = p5.Vector.fromAngle(random(TWO_PI));
+        } else {
+            // 1. Calculate the base direction vector
+            directionVector = p5.Vector.sub(target, this.pos);
+            
+            // 2. Define the spread angle (15 degrees for a shotgun blast)
+            const SHOTGUN_SPREAD_ANGLE = radians(15); 
+            
+            // 3. Apply random rotation to the direction for a "shotgun" effect
+            let randomAngle = random(-SHOTGUN_SPREAD_ANGLE, SHOTGUN_SPREAD_ANGLE);
+            directionVector.rotate(randomAngle);
+        }
+        
+        // 4. Normalize and set speed
+        this.vel = directionVector.normalize().mult(speed);
+        
+        this.acc = createVector(0, 0);
+        
+        // JUNO FIX: Reduced life for performance management (FURTHER REDUCED)
+        this.maxLife = random(10, 20); 
+        this.life = this.maxLife;
+        // JUNO FIX: Increased size for better visual presence (was 3, 6)
+        this.size = random(5, 10); 
+        
+        this.color = particleBaseColor; // MODIFIED: Use the newly introduced particleBaseColor
+    }
+
+    update() {
+        this.vel.add(this.acc);
+        this.vel.mult(0.99); // Slight damping
+        
+        // --- JUNO FIX: Scale movement by deltaTime for frame-rate independence ---
+        const speedFactor = deltaTime / (1000 / 60); 
+        this.pos.add(this.vel.copy().mult(speedFactor));
+        
+        // Kill particle if it leaves the drawing bounds
+        if (this.pos.x < 0 || this.pos.x > currentDrawW || 
+            this.pos.y < 0 || this.pos.y > currentDrawH) {
+            this.life = 0; 
+        }
+    }
+
+    display(target) {
+        let t = target;
+        
+        // Calculate a factor that goes 0 -> 1 -> 0 over the particle's life
+        let lifeRatio = 1.0 - (this.life / this.maxLife); // 0 at start, 1 at end
+        let lifeFactor = t.sin(lifeRatio * t.PI); // 0 at start, 1 at half, 0 at end
+
+        // 1. Opacity Logic (HSB alpha 0-100)
+        let alpha = lifeFactor * 100; // MAXED out max opacity (was 80)
+        
+        // 2. Size Logic 
+        let sizeFactor = t.map(lifeFactor, 0, 1, 0.5, 2.0); // Increased size factor min/max
+        let size = this.size * sizeFactor;
+        
+        t.push();
+        t.colorMode(HSB, 360, 100, 100);
+        t.noStroke();
+
+        // Draw a small, bright core using BLEND mode (ensures visibility)
+        t.blendMode(BLEND); 
+        let coreAlpha = 100; // Always fully opaque core (HSB 100)
+        let coreColor = t.color(t.hue(this.color), t.saturation(this.color), 100, coreAlpha); 
+        t.fill(coreColor);
+        // Core size increased for better visual
+        t.ellipse(this.pos.x, this.pos.y, size * 0.7, size * 0.7); 
+        
+        // Draw glow layer using ADD blend mode
+        t.blendMode(ADD);
+        
+        // Single glow layer (Reduced from 3 layers for performance)
+        let glowAlpha = 50; // Moderate glow alpha
+        // JUNO FIX: Increased glow size expansion for visual impact
+        let glowSize = size + 15.0; 
+            
+        // Alpha is max 100, so max multiplier is 1.0
+        let finalAlpha = glowAlpha * (alpha / 100); 
+            
+        let currentGlowColor = t.color(t.hue(this.color), t.saturation(this.color), t.brightness(this.color), finalAlpha);
+        t.fill(currentGlowColor);
+        t.ellipse(this.pos.x, this.pos.y, glowSize, glowSize);
+        
+        t.pop();
+    }
+
+    isDead() {
+        return this.life < 0;
+    }
+}
+
+function spawnParticle(count, targetX, targetY, isOmni = false) { // MODIFIED: isOmni added
+    if (!orbData || !particleBaseColor) return; // Check particleBaseColor
+
+    // Use the exact center of the orb
+    let startX = orbData.x; 
+    let startY = orbData.y;
+    
+    const JITTER = 1; // 1 pixel max jitter for a sense of energy
+    
+    for (let i = 0; i < count; i++) {
+        let jitterX = random(-JITTER, JITTER);
+        let jitterY = random(-JITTER, JITTER);
+        
+        // Pass the target coordinates AND the omni flag
+        particles.push(new Particle(startX + jitterX, startY + jitterY, targetX, targetY, isOmni));
+    }
+}
+
+function drawParticles(target) {
+    // In game mode, this function is only used to draw to the buffer.
+    // The update and collision logic is handled in runGameLoop.
+    for (let p of particles) {
+        if (!p.isDead()) {
+            p.display(target);
+        }
+    }
+}
+
+// ******************************************************************
+// Game Logic Functions (NEW)
+// ******************************************************************
+
+function handleOrbHit() {
+    // Find the current active layer (highest index with health > 0)
+    while (activeLayerIndex >= 1 && layerHealth[activeLayerIndex] <= 0) {
+        activeLayerIndex--;
+        // Update opacity to 0 when health hits 0
+        layerOpacities[activeLayerIndex + 1] = 0; 
+    }
+
+    if (activeLayerIndex < 1) {
+        // Game Over! All layers gone.
+        isGameActive = false;
+        
+        // NEW: Update High Score (Triggers name input if score is high enough)
+        updateAndSaveHiScores(score);
+        
+        // Remove name input if it exists but we are not waiting for a name (i.e. score too low)
+        if (!isAwaitingName && nameInput) {
+            nameInput.remove();
+            nameInput = null;
+        }
+        
+        return;
+    }
+    
+    // Reduce health of the active layer
+    layerHealth[activeLayerIndex]--;
+    
+    // If the layer's health drops to 0, it needs to disappear (opacity set to 0)
+    if (layerHealth[activeLayerIndex] <= 0) {
+        layerOpacities[activeLayerIndex] = 0;
+    }
+    
+    // NEW: Update last hit score and reset multiplier
+    lastHitScore = score;
+    scoreMultiplier = 1.0; 
+    
+    // NEW: Reset kill streak
+    killStreak = 0; 
+    
+    // NEW: Disable instant power regen (Kill Streak permanent buff is reset by damage)
+    instantPowerRegenActive = false;
+    
+    // NEW: Trigger orb damage reaction
+    orbDamageTime = millis();
+}
+
+function drawHiScoreWindow(drawW, drawH) {
+    push();
+    colorMode(RGB, 255);
+    textAlign(CENTER, CENTER);
+    textFont('Courier New', 'monospace'); 
+    
+    // Center of the list/box
+    let windowX = drawW / 2;
+    let windowY = drawH * 0.35; // Position the window above the "GAME OVER" text
+    
+    let textSizeSmall = drawW * 0.015;
+    let textSizeTitle = drawW * 0.02;
+    let lineHeight = drawW * 0.025;
+    
+    // Calculate total box size
+    let boxW = drawW * 0.35;
+    let boxH = lineHeight * (MAX_HI_SCORES + 2) + textSizeTitle; // 10 lines + title + padding
+    
+    // Draw semi-transparent background box
+    fill(0, 0, 0, 200);
+    stroke(255, 255, 0); // Yellow border
+    strokeWeight(2);
+    rectMode(CENTER);
+    rect(windowX, windowY, boxW, boxH, 10);
+    
+    // Title
+    fill(255, 255, 0); // Yellow title
+    textSize(textSizeTitle);
+    text("TOP 10 SOULS", windowX, windowY - boxH / 2 + textSizeTitle);
+    
+    // List scores
+    textAlign(LEFT, CENTER);
+    textSize(textSizeSmall);
+    
+    // Starting Y for the list items
+    let listYStart = windowY - boxH / 2 + textSizeTitle + lineHeight * 0.5;
+    let paddingX_RankScore = windowX - boxW / 2 + drawW * 0.01;
+    let paddingX_Name = windowX + boxW / 2 - drawW * 0.01;
+
+    for (let i = 0; i < MAX_HI_SCORES; i++) {
+        let entry = hiScores[i];
+        
+        let rank = (i + 1).toString().padStart(2, '0');
+        let scoreStr = entry.score.toString().padStart(5, '0');
+        let nameStr = (entry && entry.name && String(entry.name).length > 0) ? String(entry.name) : DEFAULT_NAME;
+
+        // Prefer ENS if present. Otherwise show a short address on the board,
+        // but keep the FULL address available for hover tooltip via entry.address.
+        const isWalletAddr = /^0x[a-fA-F0-9]{40}$/.test(nameStr);
+        const isEnsName = /\.eth$/i.test(nameStr);
+        const isShortAddr = /^0x[a-fA-F0-9]{3,10}…[a-fA-F0-9]{3,10}$/.test(nameStr);
+
+        // Ensure we keep the full address for tooltip even if name is shortened
+        if (isWalletAddr) {
+          if (!entry.address) entry.address = nameStr; // full
+          // Show abbreviated address on the leaderboard (desktop-friendly)
+          nameStr = nameStr.slice(0, 6) + "…" + nameStr.slice(-4); // 0xABCD…1234
+        } else if (!isEnsName && !isShortAddr) {
+          // Legacy 3-char names (backwards compatibility)
+          if (/^[A-Za-z0-9_]{1,3}$/.test(nameStr) || nameStr === '___') {
+            nameStr = nameStr.toUpperCase().substring(0, 3);
+          }
+        }
+
+
+        let highlight = false;
+        
+        // If we are awaiting a name, highlight the entry with the '___' placeholder
+        if (isAwaitingName && nameStr === '___') {
+             highlight = true;
+        } 
+        // If the score matches the final score and we are not awaiting a name, highlight it (only the first instance)
+        else if (!isAwaitingName && entry.score === score && nameStr !== '___' && i === hiScores.findIndex(e => e.score === score && e.name === entry.name)) {
+             highlight = true;
+        }
+
+
+        if (highlight) {
+            fill(255, 0, 0); // Red highlight for current score/placeholder
+            drawingContext.shadowBlur = 5;
+            drawingContext.shadowColor = 'rgba(255, 0, 0, 1)';
+        } else if (i === 0) {
+            fill(0, 255, 255); // Cyan for the High Score (Rank 1)
+            drawingContext.shadowBlur = 0;
+        } else {
+            fill(200); // White/Gray for others
+            drawingContext.shadowBlur = 0;
+        }
+
+        let textY = listYStart + i * lineHeight;
+        
+        // Print Rank and Score (Left aligned)
+        textAlign(LEFT, CENTER);
+        text(`${rank}. ${scoreStr}`, paddingX_RankScore, textY);
+        
+        // Print Name (Right aligned)
+// Show full wallet addresses without breaking the layout by shrinking text if needed.
+textAlign(RIGHT, CENTER);
+let maxNameWidth = boxW * 0.62;
+let nameSize = textSizeSmall;
+textSize(nameSize);
+while (textWidth(nameStr) > maxNameWidth && nameSize > drawW * 0.008) {
+    nameSize *= 0.9;
+    textSize(nameSize);
+}
+text(nameStr, paddingX_Name, textY);
+
+    }
+    
+    drawingContext.shadowBlur = 0;
+    pop();
+}
+
+function drawGameOverOverlay(drawW, drawH) {
+    push();
+    colorMode(RGB, 255);
+    textAlign(CENTER, CENTER);
+    
+    // Draw semi-transparent black overlay for visual contrast
+    fill(0, 0, 0, 150); 
+    rect(0, 0, drawW, drawH);
+    // (Hi score leaderboard removed from Game Over screen)
+
+    // NEW HI SCORE Banner Check
+    let gameOverY = drawH * 0.6; // Base Y position for GAME OVER
+    
+    if (isNewHighScore) {
+        drawingContext.shadowBlur = 15;
+        drawingContext.shadowColor = 'rgba(255, 255, 0, 1)'; // Yellow glow
+        
+        textSize(drawW * 0.05); // Prominent size
+        fill(255, 255, 0); // Bright Yellow
+        text("NEW HI SCORE", drawW / 2, drawH * 0.08); // Positioned high above the Hi Score table
+    }
+
+    drawingContext.shadowBlur = 20;
+    drawingContext.shadowColor = 'rgba(255, 0, 0, 1)';
+    
+    // Reposition "GAME OVER" 
+    textSize(drawW * 0.08);
+    fill(255, 0, 0);
+    text("GAME OVER", drawW / 2, gameOverY); 
+    
+    // Reposition Final Score
+    textSize(drawW * 0.03);
+    fill(255);
+    text(`Final Score: ${score}`, drawW / 2, drawH * 0.68);
+    
+    let retryPromptY = drawH * 0.85;
+
+    if (isAwaitingName) {
+        // Prompt for name input
+        textSize(drawW * 0.03);
+        fill(255, 255, 0); // Yellow prompt
+        text("CONNECT WALLET TO SUBMIT SCORE", drawW / 2, drawH * 0.73);
+        
+        // The input box is drawn by p5.js DOM at 0.77
+        
+        // Change the bottom prompt to "PRESS ENTER"
+        textSize(drawW * 0.035);
+        let pulse = sin(frameCount * 0.1) * 5 + 250; 
+        fill(255, 255, 0, pulse); // Yellow pulsating ENTER prompt
+        text("PRESS ENTER TO SUBMIT", drawW / 2, retryPromptY); 
+
+    } else {
+        // Reposition Retry Prompt
+        textSize(drawW * 0.035);
+        let pulse = sin(frameCount * 0.1) * 5 + 250; 
+        fill(255, 255, 255, pulse); 
+        text(isMobile ? "TAP TO RETRY" : "CLICK TO RETRY", drawW / 2, retryPromptY); 
+    }
+    
+    drawingContext.shadowBlur = 0;
+    pop();
+}
+
+
+function drawHUD() {
+    push();
+    colorMode(RGB, 255);
+    textAlign(LEFT, TOP);
+    textFont('Arial'); 
+    
+    // Translate to the top-left of the drawing area for relative HUD positioning
+    translate(0, 0); 
+    
+    // 1. Score
+    textSize(currentDrawW * 0.025);
+    fill(0, 255, 255, 255);
+    text(`Score: ${score}`, currentDrawW * 0.02, currentDrawH * 0.02);
+    
+    let scoreY = currentDrawH * 0.02;
+    let nextY = scoreY; // Starting Y for the next element (Multiplier or CI Bar)
+
+    
+    // 3. Multiplier Status (Always 1.0 since reward logic is disabled)
+    if (scoreMultiplier > 1.0) {
+        nextY += currentDrawH * 0.03; // Move down 3%
+        textAlign(LEFT, TOP);
+        textSize(currentDrawW * 0.025);
+        fill(255, 255, 0); // Gold
+        text(`x${scoreMultiplier.toFixed(1)} MULTIPLIER!`, currentDrawW * 0.02, nextY);
+    }
+    
+    // 4. Instant Regen Status
+    let isAnyBoostActive = instantPowerRegenActive || powerUpAmmoBoostActive;
+    
+    if (isAnyBoostActive) {
+        nextY += currentDrawH * 0.03; // Move down 3%
+        textAlign(LEFT, TOP);
+        textSize(currentDrawW * 0.025);
+        fill(255, 0, 255); // Magenta/Pink
+        
+        let textDisplay = powerUpAmmoBoostActive ? `POWER UP ACTIVE!` : `INSTANT REGEN!`;
+        text(textDisplay, currentDrawW * 0.02, nextY);
+    }
+    
+    // --- START GLOBAL CORE INTEGRITY BAR ---
+    
+    // Calculate total health
+    let totalMaxHealth = LAYER_HEALTH_MAX * 6;
+    let totalHealth = 0;
+    // Note: layerHealth is 1-indexed (indices 1 through 6 are used)
+    for (let i = 1; i <= 6; i++) {
+        totalHealth += layerHealth[i];
+    }
+    let healthRatio = totalHealth / totalMaxHealth;
+    
+    // Position and size for the bar
+    let barWidth = currentDrawW * 0.15; // Wider bar
+    let barHeight = currentDrawH * 0.02;
+    let barX = currentDrawW * 0.02;
+    
+    // Calculate Y positions to ensure text is above the bar
+    let labelY_CI = nextY + currentDrawH * 0.03; // Label starts 3% below the last element
+    if (!isAnyBoostActive && scoreMultiplier <= 1.0) {
+        // If nothing was displayed between high score and CI, pull CI up slightly
+        labelY_CI = scoreY + currentDrawH * 0.03;
+    }
+    let barY_CI = labelY_CI + currentDrawH * 0.025; // Bar position (label height + gap)
+    
+    // Label
+    textSize(currentDrawW * 0.018);
+    fill(255);
+    text('Core Integrity:', barX, labelY_CI); 
+    
+    // Draw background bar
+    fill(50);
+    rect(barX, barY_CI, barWidth, barHeight);
+    
+    // Health color transition: Red (0%) to Green (100%)
+    let healthColor = lerpColor(color(255, 0, 0), color(0, 255, 0), healthRatio);
+    
+    // Draw health bar
+    fill(healthColor);
+    rect(barX, barY_CI, barWidth * healthRatio, barHeight);
+    
+    // --- END GLOBAL CORE INTEGRITY BAR ---
+
+    // --- START AMMO/POWER BAR ---
+    let ammoRatio = currentAmmoTime / maxAmmoTime;
+    
+    // Position and size for the new bar
+    let ammoBarWidth = currentDrawW * 0.15;
+    let ammoBarHeight = currentDrawH * 0.02;
+    let ammoBarX = currentDrawW * 0.02;
+    
+    // Calculate Y positions for Ammo bar, relative to the Core Integrity bar
+    let labelY_Ammo = barY_CI + barHeight + currentDrawH * 0.01; // Label starts 0.01H below Core Integrity bar
+    let barY_Ammo = labelY_Ammo + currentDrawH * 0.025; // Bar is 0.025H below the label
+    
+    // Label
+    textSize(currentDrawW * 0.018);
+    fill(255);
+    text('Ammo/Power:', ammoBarX, labelY_Ammo);
+    
+    // Draw background bar
+    fill(50);
+    rect(ammoBarX, barY_Ammo, ammoBarWidth, ammoBarHeight);
+    
+    // Ammo color: Teal when ready/shooting, Red/Orange when recharging
+    let ammoColor;
+    if (isWeaponAvailable || isGeneratingParticles || isAnyBoostActive) {
+        // Teal/Cyan when ready/shooting (HSB: 180, 100, 100)
+        ammoColor = color(0, 255, 255); 
+    } else {
+        // Red/Orange when recharging
+        ammoColor = color(255, 50, 0); // Fixed red/orange when unavailable
+    }
+    
+    // Draw ammo bar
+    fill(ammoColor);
+    rect(ammoBarX, barY_Ammo, ammoBarWidth * ammoRatio, ammoBarHeight);
+    
+    // Draw status if recharging
+    if (!isWeaponAvailable && !isAnyBoostActive) {
+        textAlign(LEFT, TOP);
+        textSize(currentDrawW * 0.015);
+        fill(255, 50, 0);
+        text('RECHARGING...', ammoBarX + ammoBarWidth * 1.05, barY_Ammo);
+    } else if (isGeneratingParticles || isAnyBoostActive) {
+        textAlign(LEFT, TOP);
+        textSize(currentDrawW * 0.015);
+        fill(0, 255, 255);
+        text('FIRING', ammoBarX + ammoBarWidth * 1.05, barY_Ammo);
+    }
+    
+    pop();
+}
+
+function runGameLoop() {
+    // 1. Get Mouse/Touch Target for shooting (in local coordinates)
+    let targetX = currentDrawW / 2;
+    let targetY = currentDrawH / 2;
+    
+    if (isMobile) {
+        // Use the current touch position if available (touches are in screen coords)
+        if (touches.length > 0) {
+            targetX = touches[0].x - currentOffsetX; // Corrected to local space
+            targetY = touches[0].y - currentOffsetY; // Corrected to local space
+        }
+    } else {
+        // Desktop uses mouse position relative to the translated origin
+        targetX = mouseX - currentOffsetX;
+        targetY = mouseY - currentOffsetY;
+    }
+    
+    // Check for omnidirectional fire condition: Mobile AND touch is near the orb center
+    let isOmniFire = false;
+    let targetPos = createVector(targetX, targetY);
+    let orbCenter = createVector(orbData.x, orbData.y);
+    
+    // Check if the current touch/mouse position is within 150% of the orb's radius
+    let orbRadius = orbData.size / 2;
+    if (p5.Vector.dist(targetPos, orbCenter) < orbRadius * 1.5) {
+        isOmniFire = true;
+    }
+
+    // Performance factor is always 1.0 (fixed performance)
+    gameplayPerformanceFactor = 1.0;
+    
+    // Check if any boost is active
+    let isBoostActive = instantPowerRegenActive || powerUpAmmoBoostActive;
+    
+    // --- POWER-UP DEACTIVATION (NEW) ---
+    if (powerUpAmmoBoostActive && millis() > ammoBoostEndTime) {
+        powerUpAmmoBoostActive = false;
+        // If neither permanent streak nor temporary boost is active, reset weapon state if needed.
+        if (!instantPowerRegenActive && !isGeneratingParticles) {
+             currentAmmoTime = maxAmmoTime; 
+             isWeaponAvailable = true;
+        }
+    }
+    // --- END POWER-UP DEACTIVATION ---
+
+    if (isGameActive && activeLayerIndex >= 1) {
+        // --- AMMO MANAGEMENT ---
+        
+        if (isBoostActive) {
+            // Instant Regen Mode: Weapon is always available and immediately topped up.
+            isWeaponAvailable = true;
+            currentAmmoTime = maxAmmoTime;
+            // Skip all normal depletion/recharge logic below.
+        } else {
+            // --- NORMAL AMMO LOGIC ---
+            if (isGeneratingParticles) {
+                // 1. Deplete ammo
+                currentAmmoTime -= deltaTime; 
+                
+                if (currentAmmoTime <= 0) {
+                    currentAmmoTime = 0;
+                    isGeneratingParticles = false; // Stop shooting immediately
+                    isWeaponAvailable = false; // Enter timed recharge phase
+                    rechargeStartTime = millis(); // Start recharge timer
+                }
+            } else if (!isWeaponAvailable) {
+                // 2. Timed Recharge phase
+                let timeElapsed = millis() - rechargeStartTime;
+                
+                // Recharge the ammo bar visually
+                currentAmmoTime = map(timeElapsed, 0, currentRechargeDuration, 0, maxAmmoTime, true);
+                
+                if (timeElapsed >= currentRechargeDuration) {
+                    currentAmmoTime = maxAmmoTime;
+                    isWeaponAvailable = true;
+                }
+            } else {
+                // 3. Not shooting, weapon is ready, keep ammo full
+                currentAmmoTime = maxAmmoTime;
+            }
+        }
+        // --- END AMMO MANAGEMENT ---
+    } else {
+        // Game is over, reset ammo to full and clear boosts
+        currentAmmoTime = maxAmmoTime;
+        isWeaponAvailable = true;
+        powerUpAmmoBoostActive = false;
+        instantPowerRegenActive = false;
+    }
+    
+    // 2. Spaceship Spawning (fixed rate, only base ships, fixed max count)
+    if (activeLayerIndex >= 1 && spaceships.length < MAX_ENEMIES) {
+        
+        // Spawn rate FIXED to BASE_SPAWN_RATE
+        const fixedSpawnRate = BASE_SPAWN_RATE; 
+        
+        if (frameCount % floor(fixedSpawnRate) === 0) { 
+            let newShip;
+            
+            // FIXED: Always spawn a base ship with fixed initial stats (pass 0 for score)
+            newShip = new Spaceship(0); 
+            spaceships.push(newShip);
+        }
+    }
+    
+    // --- POWER-UP SPAWNING (NEW) ---
+    if (activeLayerIndex >= 1 && millis() - lastPowerUpSpawnTime > POWERUP_COOLDOWN) {
+        // Spawn chance check: 50% chance to spawn a power-up
+        if (random() < 0.5) { 
+            // MODIFIED: 20% chance for 'shield', 80% chance for 'ammo'
+            let type = random() < 0.2 ? 'shield' : 'ammo'; 
+            powerUps.push(new PowerUp(type));
+            lastPowerUpSpawnTime = millis();
+        } else {
+            // If no spawn, reset timer to check again faster (e.g., 2 seconds later)
+            lastPowerUpSpawnTime = millis() - POWERUP_COOLDOWN + 2000;
+        }
+    }
+    // --- END POWER-UP SPAWNING ---
+    
+    // 3. Particle Generation (Shooting)
+    // Only spawn if isGeneratingParticles is true (controlled by mouse/touch AND ammo state)
+    if (isGeneratingParticles) {
+        const rate = isMobile ? PARTICLE_RATE_MOBILE : PARTICLE_RATE_DESKTOP;
+        // Spawn particles towards the target (mouse/touch)
+        spawnParticle(rate, targetX, targetY, isOmniFire); 
+    }
+    
+    // 4. Update and Collision Checks
+    
+    // Particle-Spaceship/PowerUp collision and update
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.update();
+        
+        let particleDestroyed = false;
+        
+        // --- Particle-PowerUp Collision Check (New logic: must shoot powerup to activate) ---
+        for (let k = powerUps.length - 1; k >= 0; k--) {
+            let pu = powerUps[k];
+            let dist = p5.Vector.dist(p.pos, pu.pos);
+            
+            // Collision distance is particle size + half the powerup size
+            if (dist < (p.size + pu.size / 2)) { 
+                applyPowerUpEffect(pu.type);
+                powerUps.splice(k, 1);
+                particleDestroyed = true;
+                break; 
+            }
+        }
+        
+        if (particleDestroyed) {
+             particles.splice(i, 1);
+             continue; // Particle is destroyed, skip to the next particle
+        }
+        // --- End Particle-PowerUp Collision Check ---
+        
+        // 4b. Particle-Spaceship collision (runs only if particle wasn't destroyed by a powerup)
+        
+        // Apply fixed collision dampening (now 10% chance to check)
+        if (random() < PARTICLE_COLLISION_FACTOR) {
+            for (let j = spaceships.length - 1; j >= 0; j--) {
+                let s = spaceships[j];
+                let dist = p5.Vector.dist(p.pos, s.pos);
+                
+                if (dist < (p.size + s.size)) { 
+                    particleDestroyed = true;
+                    
+                    if (s.takeDamage()) {
+                        spaceships.splice(j, 1);
+                        score += 1 * scoreMultiplier; // APPLY MULTIPLIER
+                        
+                        // NEW: Kill streak logic
+                        killStreak++;
+                        if (killStreak > 0 && killStreak % KILL_STREAK_REGEN_THRESHOLD === 0) {
+                            instantPowerRegenActive = true; // ACTIVATE PERMANENT BOOST
+                            currentAmmoTime = maxAmmoTime; // Ensure visual/internal max on activation
+                            isWeaponAvailable = true;
+                        }
+                    }
+                    break; // Particle is destroyed, no need to check other spaceships
+                }
+            }
+        }
+        
+        if (particleDestroyed || p.isDead()) {
+            particles.splice(i, 1);
+        }
+    }
+
+    // Spaceship-Orb collision and update
+    for (let i = spaceships.length - 1; i >= 0; i--) {
+        let s = spaceships[i];
+        
+        // 1. ALWAYS update movement/physics for smooth motion
+        s.update();
+        
+        if (s.checkOrbCollision()) {
+            // Spaceship hits the orb!
+            spaceships.splice(i, 1);
+            handleOrbHit();
+        }
+    }
+    
+    // Power-up update 
+    // Orb collision check REMOVED here, as shooting activates them.
+    for (let i = powerUps.length - 1; i >= 0; i--) {
+        let pu = powerUps[i];
+        pu.update();
+        
+        // Power-up now drifts towards the core and must be shot.
+    }
+
+    // Enemy Projectile update and Orb collision (REMOVED)
+    
+    // 5. Drawing (Parallax layers, orb, ships, particles)
+    
+    // Calculate time-based warping for dynamic background - REMOVED FOR PERFORMANCE
+    let timeShiftX = 0; 
+    let timeShiftY = 0; 
+    let timeRot = 0; 
+    
+    // No interactive parallax in game mode, set to 0
+    let mouseXNorm = 0;
+    let mouseYNorm = 0;
+
+    // --- START CLIPPING ---
+    push();
+    noStroke();
+    rect(0, 0, currentDrawW, currentDrawH);
+    drawingContext.clip();
+    
+    let centerX = currentDrawW / 2;
+    let centerY = currentDrawH / 2;
+    
+    // Draw all line layers (L1-L6) using drawLayerWithParallax for opacity and movement
+    
+    // L1 (Background + Lines)
+    drawLayerWithParallax(artBufferLayer1, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[1], timeShiftX, timeShiftY, timeRot, layerOpacities[1], gameplayPerformanceFactor);
+    
+    // Draw layers 2 and 3 (lines under orb)
+    drawLayerWithParallax(artBufferLayer2, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[2], timeShiftX, timeShiftY, timeRot, layerOpacities[2], gameplayPerformanceFactor);
+    drawLayerWithParallax(artBufferLayer3, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[3], timeShiftX, timeShiftY, timeRot, layerOpacities[3], gameplayPerformanceFactor);
+    
+    // Draw the ORB (still pulsing, now with damage flash)
+    artBufferOrb.clear();
+    drawOrb(1.0, artBufferOrb); 
+    push();
+    blendMode(SCREEN); 
+    // Use ORB parallax factors
+    drawLayerWithParallax(artBufferOrb, mouseXNorm, mouseYNorm, PARALLAX_FACTORS.ORB, timeShiftX, timeShiftY, timeRot, 1.0, gameplayPerformanceFactor);
+    pop(); 
+    
+    // Draw layers 4, 5, 6 (lines over orb)
+    drawLayerWithParallax(artBufferLayer4, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[4], timeShiftX, timeShiftY, timeRot, layerOpacities[4], gameplayPerformanceFactor);
+    drawLayerWithParallax(artBufferLayer5, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[5], timeShiftX, timeShiftY, timeRot, layerOpacities[5], gameplayPerformanceFactor);
+    drawLayerWithParallax(artBufferLayer6, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[6], timeShiftX, timeShiftY, timeRot, layerOpacities[6], gameplayPerformanceFactor);
+    
+    // Draw spaceships directly to the main canvas context (this)
+    for (let s of spaceships) {
+        s.display(this); 
+    }
+    
+    // Draw power-ups (NEW)
+    for (let pu of powerUps) {
+        pu.display(this);
+    }
+
+    // Draw enemy projectiles (REMOVED)
+    
+    // Draw particles (projectiles)
+    artBufferParticles.clear();
+    drawParticles(artBufferParticles); // Draw particles to the buffer
+    
+    push();
+    blendMode(ADD); 
+    drawLayerWithParallax(artBufferParticles, 0, 0, PARALLAX_FACTORS.PARTICLE, timeShiftX, timeShiftY, timeRot, 1.0, gameplayPerformanceFactor);
+    pop(); 
+    
+    // Draw Score and Health
+    drawHUD();
+
+    pop(); // Restores the drawing context, removing the clip
+}
+
+
+// ******************************************************************
+// Generative Art Draw Loop (MODIFIED)
+// ******************************************************************
+function drawGenerativeArt() {
+  
+  // If drawing is in progress
+  if (!artIsFinished) {
+      
+      // --- Orb Opacity Calculation (Needs to run every frame) ---
+      let orbAlphaFactor = 0.0; 
+      if (orbData && orbData.layerIndexStart !== undefined) {
+          let linesInL4 = orbData.layerIndexEnd - orbData.layerIndexStart;
+          let halfwayPoint = orbData.layerIndexStart + linesInL4 / 2;
+          
+          let t_raw = map(currentLine, orbData.layerIndexStart, halfwayPoint, 0.0, 1.0, true);
+          
+          orbAlphaFactor = pow(t_raw, 3); 
+      }
+      // --- End Orb Opacity Calculation ---
+      
+      // Determine the drawing speed: default (10) or fast-forward (100)
+      let currentLineSpeed = isFastForwardingLineGen ? FAST_FORWARD_SPEED : lineSpeed;
+      
+      // Draw the next few segments/lines to the buffer
+      for (let k = 0; k < currentLineSpeed; k++) { 
+          if (currentLine < totalLines) {
+              drawLineSegment(currentLine); 
+              
+              if (lineData[currentLine].currentSegment >= lineData[currentLine].segments) {
+                  currentLine++;
+              }
+          } else if (currentLine >= totalLines) {
+              // Drawing just finished
+              artIsFinished = true;
+              isGameActive = true; // Start the game immediately after drawing finishes
+              
+              // NEW: Trigger game instructions narrative
+              narrativeState = 'instruction_sequence';
+              instructionNarrativeStartTime = millis();
+          }
+      }
+      
+      // Draw the six buffers to the screen *without* interaction while drawing is in progress
+      let centerX = currentDrawW / 2;
+      let centerY = currentDrawH / 2;
+      
+      image(artBufferLayer1, centerX, centerY, currentDrawW, currentDrawH);
+      image(artBufferLayer2, centerX, centerY, currentDrawW, currentDrawH);
+      image(artBufferLayer3, centerX, centerY, currentDrawW, currentDrawH);
+      
+      // --- Draw Orb to its buffer and then to the canvas (between L3 and L4) ---
+      artBufferOrb.clear();
+      if (orbData) { 
+          drawOrb(orbAlphaFactor, artBufferOrb); 
+      }
+      
+      push();
+      blendMode(SCREEN); // Use SCREEN for a luminous, translucent glow
+      image(artBufferOrb, centerX, centerY, currentDrawW, currentDrawH);
+      pop(); // Reset blend mode to BLEND
+      
+      image(artBufferLayer4, centerX, centerY, currentDrawW, currentDrawH);
+      image(artBufferLayer5, centerX, centerY, currentDrawW, currentDrawH);
+      image(artBufferLayer6, centerX, centerY, currentDrawW, currentDrawH); 
+      
+      artBufferParticles.clear();
+      image(artBufferParticles, centerX, centerY, currentDrawW, currentDrawH); 
+      
+      return; // Exit here if art is still drawing
+  }
+  
+  // --- ART IS FINISHED ---
+
+  if (isGameActive) {
+      // Game Mode is active, run game logic and skip all other interaction/parallax
+      
+      // Explicitly draw a black background over the art area to ensure a clean slate 
+      // before drawing game elements. This is crucial as the game mode doesn't use 
+      // the motion trail fade or the static background drawing logic.
+      push();
+      colorMode(RGB, 255); 
+      noStroke();
+      fill(0);
+      rect(0, 0, currentDrawW, currentDrawH);
+      pop();
+      
+      runGameLoop();
+      
+      // NOTE: The instruction narrative is now drawn in the main draw loop (narrativeState)
+      return;
+  }
+  
+  // NEW: Check for Game Over state (activeLayerIndex < 1 implies isGameActive is false)
+  if (activeLayerIndex < 1) {
+      // Game Over: Draw the static final frame + overlay
+      
+      // FIX: Explicitly draw a black background, as transparent layers will result in a blank canvas.
+      push();
+      colorMode(RGB, 255); 
+      noStroke();
+      fill(0);
+      rect(0, 0, currentDrawW, currentDrawH);
+      pop();
+      
+      // All movement is now removed
+      let timeShiftX = 0; 
+      let timeShiftY = 0; 
+      let timeRot = 0; 
+      
+      // No interactive parallax in game over mode, set to 0
+      let mouseXNorm = 0;
+      let mouseYNorm = 0;
+
+      // --- START CLIPPING ---
+      push();
+      noStroke();
+      rect(0, 0, currentDrawW, currentDrawH);
+      drawingContext.clip();
+      
+      let centerX = currentDrawW / 2;
+      let centerY = currentDrawH / 2;
+
+      // 1. Draw all layers with parallax (now static)
+      drawLayerWithParallax(artBufferLayer1, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[1], timeShiftX, timeShiftY, timeRot, layerOpacities[1], 1.0);
+      drawLayerWithParallax(artBufferLayer2, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[2], timeShiftX, timeShiftY, timeRot, layerOpacities[2], 1.0);
+      drawLayerWithParallax(artBufferLayer3, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[3], timeShiftX, timeShiftY, timeRot, layerOpacities[3], 1.0);
+      
+      // Draw the ORB
+      artBufferOrb.clear();
+      drawOrb(1.0, artBufferOrb); 
+      push();
+      blendMode(SCREEN); 
+      drawLayerWithParallax(artBufferOrb, mouseXNorm, mouseYNorm, PARALLAX_FACTORS.ORB, timeShiftX, timeShiftY, timeRot, 1.0, 1.0);
+      pop(); 
+      
+      drawLayerWithParallax(artBufferLayer4, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[4], timeShiftX, timeShiftY, timeRot, layerOpacities[4], 1.0);
+      drawLayerWithParallax(artBufferLayer5, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[5], timeShiftX, timeShiftY, timeRot, layerOpacities[5], 1.0);
+      drawLayerWithParallax(artBufferLayer6, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[6], timeShiftX, timeShiftY, timeRot, layerOpacities[6], 1.0);
+      
+      // Draw spaceships (they stop moving but remain visible)
+      for (let s of spaceships) {
+          s.display(this); 
+      }
+      
+      // Draw power-ups (static)
+      for (let pu of powerUps) {
+          pu.display(this);
+      }
+
+      // Draw enemy projectiles (REMOVED)
+      
+      // Draw particles (they should fade out naturally)
+      artBufferParticles.clear();
+      drawParticles(artBufferParticles);
+      push();
+      blendMode(ADD); 
+      drawLayerWithParallax(artBufferParticles, 0, 0, PARALLAX_FACTORS.PARTICLE, timeShiftX, timeShiftY, timeRot, 1.0, 1.0);
+      pop(); 
+      
+      // 2. Draw the HUD
+      drawHUD(); 
+      
+      // 3. Draw the Game Over Overlay (ON TOP of everything)
+      drawGameOverOverlay(currentDrawW, currentDrawH);
+
+      pop(); // Restores the drawing context, removing the clip
+      
+      // Stop the regular parallax/rebuild logic from running
+      return; 
+  }
+
+  // --- Standard Parallax Mode (Rebuild/Explosion) ---
+  
+  // Check for rebuild (disabled during game mode)
+  if (isHolding && millis() - holdStartTime >= REBUILD_HOLD_DURATION) {
+      explodeAndRebuild(); 
+      return; 
+  }
+  
+  // Explosion fade logic (disabled during game mode)
+  if (isExploding) {
+      drawExplosionFade();
+      return; 
+  }
+
+  // --- Normal Parallax Drawing Logic (Runs if not in game/explosion/game over) ---
+
+  let mouseXNorm = 0; // Static
+  let mouseYNorm = 0; // Static
+  let timeShiftX = 0; // Static
+  let timeShiftY = 0; // Static
+  let timeRot = 0; // Static
+  currentTrailAlpha = 0; // No trail fade
+  
+  // --- START CLIPPING ---
+  push();
+  noStroke();
+  rect(0, 0, currentDrawW, currentDrawH);
+  drawingContext.clip();
+
+  // 1. Draw Layer 1 (Static Background Gradient) ONLY ONCE
+  if (!artBackgroundDrawn) {
+      image(artBufferLayer1, currentDrawW / 2, currentDrawH / 2, currentDrawW, currentDrawH);
+      artBackgroundDrawn = true;
+  }
+
+  // 2. Apply the transparent trail effect (Will be skipped as currentTrailAlpha is 0)
+  if (currentTrailAlpha > 1) {
+      colorMode(RGB, 255); 
+      noStroke();
+      fill(0, 0, 0, currentTrailAlpha); 
+      rect(0, 0, currentDrawW, currentDrawH); 
+  }
+
+  // 3. Draw Layers 2 through 3 with parallax (now static)
+  // Note: perfFactor is 1.0 in non-game/parallax mode
+  drawLayerWithParallax(artBufferLayer2, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[2], timeShiftX, timeShiftY, timeRot);
+  drawLayerWithParallax(artBufferLayer3, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[3], timeShiftX, timeShiftY, timeRot);
+  
+  // 4. Draw the ORB LAYER
+  if (isGeneratingParticles) {
+      const rate = isMobile ? PARTICLE_RATE_MOBILE : PARTICLE_RATE_DESKTOP;
+      // In parallax mode, particles are just pixie dust from the orb center (always omni-directional)
+      spawnParticle(rate, orbData.x, orbData.y, true); 
+      currentPromptType = null; 
+  }
+  
+  artBufferOrb.clear();
+  drawOrb(1.0, artBufferOrb); 
+  
+  push();
+  blendMode(SCREEN); 
+  drawLayerWithParallax(artBufferOrb, mouseXNorm, mouseYNorm, PARALLAX_FACTORS.ORB, timeShiftX, timeShiftY, timeRot);
+  pop(); 
+
+  // 5. Draw Layers 4 through 6 with parallax (now static)
+  drawLayerWithParallax(artBufferLayer4, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[4], timeShiftX, timeShiftY, timeRot);
+  drawLayerWithParallax(artBufferLayer5, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[5], timeShiftX, timeShiftY, timeRot);
+  drawLayerWithParallax(artBufferLayer6, mouseXNorm, mouseYNorm, PARALLAX_FACTORS[6], timeShiftX, timeShiftY, timeRot);
+  
+  // 6. PARTICLE DRAWING 
+  artBufferParticles.clear();
+  // In parallax mode, particles are updated and drawn here
+  for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.update();
+        p.display(artBufferParticles);
+        if (p.isDead()) {
+            particles.splice(i, 1);
+        }
+  }
+  
+  push();
+  blendMode(ADD); 
+  drawLayerWithParallax(artBufferParticles, 0, 0, PARALLAX_FACTORS.PARTICLE, timeShiftX, timeShiftY, timeRot);
+  pop(); 
+  
+  pop(); // Restores the drawing context, removing the clip
+}
+
+// Shared click logic for the main background interaction
+function handleClick() {
+  // Check for GAME OVER RETRY first
+  if (activeLayerIndex < 1) {
+      if (isAwaitingName) return; // Block retry click/tap while awaiting name
+      
+      // Game Over state, retry using existing art
+      initializeGenerativeArt(false); // Do not regenerate art
+      return;
+  }
+  
+  // If generative art is showing, clicking/tapping does nothing here (particle logic handles interaction)
+  if (showGenerativeArt || showGirlAction || showGirlSelection || showGirlSelected || showWallOpening) {
+    return;
+  }
+  
+  // Start the Girl-Action animation (Initial sequence trigger)
+  showGirlAction = true;
+  girlActionStartTime = millis();
+  
+  // Clear the initial prompt when action starts
+  if (currentPromptType === 'initial') {
+      currentPromptType = null;
+  }
+}
+
+// NEW: Shared function to handle the release of the firing button (mouse or touch)
+function handleFireRelease() {
+    let wasGenerating = isGeneratingParticles;
+    isGeneratingParticles = false;
+    isHolding = false; // Stop holding timer (for rebuild)
+    holdStartTime = 0;
+    
+    // Stop fast forward if it was active
+    isFastForwardingLineGen = false;
+    
+    // Check if any boost is active
+    let isBoostActive = instantPowerRegenActive || powerUpAmmoBoostActive;
+
+    // If a boost is active, we don't need to calculate cooldown, just ensure weapon is ready.
+    if (isBoostActive) {
+        currentAmmoTime = maxAmmoTime;
+        isWeaponAvailable = true;
+        return;
+    }
+
+    // --- REVISED RECHARGE LOGIC ---
+    let wasDepleted = currentAmmoTime <= 0;
+    
+    if (wasDepleted) {
+        // Weapon was completely depleted, start timed recharge
+        rechargeStartTime = millis();
+        isWeaponAvailable = false;
+    } else if (currentAmmoTime < maxAmmoTime) {
+        // Weapon released early (still had ammo), snap back to full ammo/ready state
+        currentAmmoTime = maxAmmoTime;
+        isWeaponAvailable = true;
+    }
+    // --- END REVISED RECHARGE LOGIC ---
+}
+
+function mousePressed() {
+    // Check if we are in the line generation phase
+    if (showGenerativeArt && !artIsFinished) {
+        isFastForwardingLineGen = true;
+        currentPromptType = null; // Clear prompt
+        return; 
+    }
+    
+    // Only proceed if generative art is finished and the game is ready
+    if (mouseButton === LEFT && showGenerativeArt && artIsFinished && !showWallOpening && !isExploding && activeLayerIndex >= 1) {
+        
+        // Start particle generation only if game is active AND weapon is available (or boosted)
+        let isBoosted = instantPowerRegenActive || powerUpAmmoBoostActive;
+        if (isGameActive && (isWeaponAvailable || isBoosted)) { 
+            isGeneratingParticles = true;
+            // Instantly clear narrative instructions on first interaction (click/tap and hold)
+            if (narrativeState === 'instruction_sequence') {
+                narrativeState = 'off';
+            }
+        }
+
+        currentPromptType = null; // Clear all prompts on interaction
+        
+        // Start rebuild timer (only if game is NOT active)
+        if (!isGameActive) {
+            isHolding = true;
+            holdStartTime = millis();
+        }
+    }
+}
+
+function mouseReleased() {
+    handleFireRelease();
+}
+
+function touchStarted(event) {
+    // Check if we are in the line generation phase
+    if (showGenerativeArt && !artIsFinished) {
+        if (event.target === cnv.elt) {
+            isFastForwardingLineGen = true;
+            currentPromptType = null; // Clear prompt
+            return false; // Prevent default
+        }
+    }
+
+    if (showGenerativeArt && artIsFinished && !showWallOpening && !isExploding) {
+        // Check if the touch target is the canvas itself (not a pill)
+        if (event.target === cnv.elt) {
+            
+            // Start particle generation only if game is active AND weapon is available (or boosted)
+            let isBoosted = instantPowerRegenActive || powerUpAmmoBoostActive;
+            if (isGameActive && (isWeaponAvailable || isBoosted)) {
+                isGeneratingParticles = true;
+                // Instantly clear narrative instructions on first interaction (click/tap and hold)
+                if (narrativeState === 'instruction_sequence') {
+                    narrativeState = 'off';
+                }
+            }
+            
+            currentPromptType = null; // Clear all prompts on interaction
+            
+            // Start rebuild timer (only if game is NOT active)
+            if (!isGameActive) {
+                isHolding = true;
+                holdStartTime = millis();
+            }
+
+            return false; // Prevent default scrolling/zooming
+        }
+    }
+}
+
+function touchEnded(event) {
+    // Stop particle generation if the touch ends on the canvas
+    if (event.target === cnv.elt) {
+        handleFireRelease();
+        
+        // If we are NOT in the art phase (initial start) OR if we are in the game over state
+        if (!showGenerativeArt || activeLayerIndex < 1) {
+             if (isAwaitingName) return; // Block retry click/tap while awaiting name
+             handleClick();
+        }
+        return false; // prevent default scrolling
+    }
+}
+
+function mouseClicked(event) {
+  // Only trigger the canvas click for the initial sequence if not mobile
+  if (event.target === cnv.elt && !isMobile) {
+      // If the art is not showing (initial start) OR if the game is over
+      if (!showGenerativeArt || activeLayerIndex < 1) {
+          if (isAwaitingName) return; // Block retry click/tap while awaiting name
+          handleClick();
+      }
+  }
+}
+
+
+function windowResized() {
+  // Resize the canvas to fit the new window dimensions
+  resizeCanvas(windowWidth, windowHeight);
+  
+  // Re-detect mobile status on resize, as width might change significantly
+  isMobile = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) && width < 767;
+  
+  calculateDrawingBounds();
+  
+  // If the generative art is showing, re-initialize to resize and redraw the buffer
+  if (showGenerativeArt) {
+    // Note: windowResized forces a full art regeneration (true) to ensure buffers resize correctly
+    initializeGenerativeArt(true); 
+  }
+  
+  // If the name input is active, recalculate its position
+  if (isAwaitingName && nameInput) {
+      let inputWidth = currentDrawW * 0.15;
+      let inputHeight = currentDrawH * 0.03;
+      let inputX = currentOffsetX + currentDrawW / 2 - inputWidth / 2;
+      let inputY = currentOffsetY + currentDrawH * 0.77; // Matching the hardcoded Y position
+      nameInput.position(inputX, inputY);
+      nameInput.size(inputWidth, inputHeight);
+      nameInput.style('font-size', `${currentDrawW * 0.018}px`);
+  }
+}
+
+// This function is required by p5.js to reliably update rotationX/Y/Z on some mobile environments.
+function deviceOrientation() {
+  // No logic needed here, as the draw loop uses the global rotation variables.
+}
+
+// Function to pre-calculate the precise timing for the narrative sequence
+function preCalculateNarrativeTiming(texts) {
+    let cumulativeTime = 0;
+    let timingData = []; 
+
+    for (let i = 0; i < texts.length; i++) {
+        const text = texts[i];
+        const len = text.length;
+
+        const T_TYPE = len * TYPEWRITER_CHAR_DURATION;
+
+        let start_time = cumulativeTime;
+        
+        // All lines now follow the same Type -> Hold -> Fade structure
+        let T_END_TYPE = start_time + T_TYPE;
+        let T_END_HOLD = T_END_TYPE + NARRATIVE_TEXT_HOLD;
+        let T_END_FADE = T_END_HOLD + NARRATIVE_TEXT_FADE;
+        
+        cumulativeTime = T_END_FADE; 
+        
+        timingData.push({
+            text: text,
+            start: start_time,
+            type_end: T_END_TYPE,
+            hold_end: T_END_HOLD,
+            fade_end: T_END_FADE,
+        });
+    }
+    return timingData;
+}
+  
+// (removed in-frame WalletConnect overlay — submissions happen on external submit.html)
+// =====================================================
+// Step J.3 — Receive leaderboard update from submit.html
+// =====================================================
+(function () {
+  // Only accept messages from your submit domain (recommended)
+  const ALLOWED_ORIGINS = new Set([
+    "https://pick-a-pill-leaderboard.vercel.app",
+    // If you ever change domains, add it here.
+  ]);
+
+  window.addEventListener("message", (event) => {
+    try {
+      // Optional security check: ignore unknown origins
+      if (event.origin && !ALLOWED_ORIGINS.has(event.origin)) return;
+
+      const data = event.data;
+      if (!data || data.type !== "PICK_A_PILL_LEADERBOARD_UPDATE") return;
+
+      const top = Array.isArray(data.payload) ? data.payload : [];
+      console.log("[PICK A PILL] leaderboard update received:", top);
+
+      // --- Try to plug into your existing leaderboard render/update functions ---
+      // If you already have a global render function, this will use it:
+      if (typeof window.renderLeaderboard === "function") {
+        window.renderLeaderboard(top);
+        return;
+      }
+
+      if (typeof window.updateLeaderboardUI === "function") {
+        window.updateLeaderboardUI(top);
+        return;
+      }
+
+      // --- Fallback: if you have a DOM container with id="leaderboard", update it ---
+      const el = document.getElementById("leaderboard");
+      if (el) {
+        // Keep it simple + safe:
+        // expects objects like { address, score, created_at }
+        el.innerHTML = top
+          .map((row, i) => {
+            const addr = row.address || row.wallet || "(unknown)";
+            const score = row.score ?? "(?)";
+            return `<div style="display:flex;justify-content:space-between;gap:12px;">
+              <span>#${i + 1} ${addr}</span>
+              <span>${score}</span>
+            </div>`;
+          })
+          .join("");
+      }
+
+      // If none of the above exists, we still stored it + logged it.
+      // You can wire it into your custom leaderboard function later.
+      window.__LATEST_LEADERBOARD__ = top;
+    } catch (err) {
+      console.warn("[PICK A PILL] message handler error:", err);
+    }
+  });
+})();
+
+// Receive updated leaderboard from submit.html and refresh UI
+window.addEventListener("message", (event) => {
+  if (!event.data || event.data.type !== "PICK_A_PILL_LEADERBOARD_UPDATE") return;
+
+  const entries = event.data.payload;
+  if (!Array.isArray(entries)) return;
+
+  // If you already have a render function, call it here:
+  if (typeof renderLeaderboard === "function") {
+    renderLeaderboard(entries);
+    return;
+  }
+
+  // Otherwise fallback: fetch fresh leaderboard from API and render it
+  fetchLatestLeaderboardAndRender();
+});async function fetchLatestLeaderboardAndRender() {
+  try {
+    const res = await fetch("https://pick-a-pill-leaderboard.vercel.app/api/leaderboard", {
+      cache: "no-store"
+    });
+    const data = await res.json();
+
+    // If you already have a render function, call it:
+    if (typeof renderLeaderboard === "function") {
+      renderLeaderboard(data);
+      return;
+    }
+
+    // If you don't, tell me what your leaderboard container ID is
+    console.log("Leaderboard data:", data);
+  } catch (e) {
+    console.log("Leaderboard fetch failed:", e);
+  }
+}
+
+
+// Override submit trigger to ensure DOM click opens WalletConnect in Transient
+const _orig_updateAndSaveHiScores = updateAndSaveHiScores;
+updateAndSaveHiScores = function(finalScore) {
+  const lowest = hiScores[MAX_HI_SCORES - 1]?.score || 0;
+  if (finalScore > lowest) {
+    pendingScoreToSubmit = finalScore;
+    // Stop on Game Over and let the player choose to submit.
+    showGameOverSubmitPrompt(finalScore);
+    return;
+  }
+  return _orig_updateAndSaveHiScores(finalScore);
+};
+
+</script>
+<div id="walletModal" style="
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.75); z-index:99999; padding:20px;">
+<div style="
+    width:min(420px, 92vw); border-radius:18px; padding:18px 16px;
+    background:rgba(10,10,10,0.92); border:1px solid rgba(255,255,255,0.15);
+    color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+<div style="font-weight:700; font-size:18px;">Connect Wallet</div>
+<button id="closeWalletModal" style="
+        background:transparent; border:0; color:#fff; font-size:20px; cursor:pointer;">✕</button>
+</div>
+<div style="opacity:0.85; margin-top:6px; font-size:13px; line-height:1.35;">
+      Connect a wallet to submit your score to the global leaderboard.
+    </div>
+<div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
+<button class="walletBtn" id="btnWalletConnect">WalletConnect</button>
+</div>
+<div id="walletModalStatus" style="margin-top:12px; font-size:12px; opacity:0.9;"></div>
+</div>
+</div>
+<style>
+  .walletBtn{
+    width:100%;
+    padding:12px 14px;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,0.18);
+    background:rgba(255,255,255,0.06);
+    color:#fff;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:650;
+    text-align:left;
+  }
+  .walletBtn:active{ transform: translateY(1px); }
+</style>
+<!-- Submit Score Prompt (shown after wallet connects) -->
+<div id="submitScoreModal" style="
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.75); z-index:100000; padding:20px;">
+<div style="
+    width:min(460px, 94vw); border-radius:18px; padding:18px 16px;
+    background:rgba(10,10,10,0.94); border:1px solid rgba(255,255,255,0.15);
+    color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+<div style="font-weight:800; font-size:18px;">Submit Score?</div>
+<button id="closeSubmitScoreModal" style="background:transparent;border:0;color:#fff;font-size:20px;cursor:pointer;">✕</button>
+</div>
+<div style="opacity:0.9; margin-top:10px; font-size:13px; line-height:1.35;">
+      You qualified for the leaderboard.
+    </div>
+<div style="margin-top:12px; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.05);">
+<div style="font-size:12px; opacity:0.85;">Wallet</div>
+<div id="submitScoreAddress" style="margin-top:2px; font-size:12px; word-break:break-all; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;"></div>
+<div style="margin-top:10px; font-size:12px; opacity:0.85;">Score</div>
+<div id="submitScoreValue" style="margin-top:2px; font-size:18px; font-weight:800;"></div>
+</div>
+<div style="display:flex; gap:10px; margin-top:14px;">
+<button class="walletBtn" id="btnConfirmSubmitScore" style="flex:1; text-align:center;">Submit</button>
+<button class="walletBtn" id="btnSkipSubmitScore" style="flex:1; text-align:center;">Continue Playing</button>
+</div>
+<div id="submitScoreModalStatus" style="margin-top:12px; font-size:12px; opacity:0.9;"></div>
+</div>
+</div>
+<!-- (removed DOM WalletConnect Overlay) -->
+<!-- ===== Game Over Submit Prompt (no wallet in-frame) ===== -->
+<div id="gameOverSubmitPrompt" style="
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.68); z-index:9999999;
+">
+<div style="
+    width:min(460px,92vw);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:18px;
+    background:rgba(10,10,10,.92);
+    padding:16px;
+    color:#fff;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  ">
+<div style="font-weight:900; letter-spacing:.02em;">GAME OVER</div>
+<div id="gameOverSubmitPromptText" style="opacity:.82; margin-top:8px; font-size:13px; line-height:1.35;"></div>
+<div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+<button id="btnGameOverSubmit" style="
+        padding:10px 12px; border-radius:14px;
+        border:1px solid rgba(255,255,255,.18);
+        background:rgba(255,145,175,.18);
+        color:white; font-weight:800; cursor:pointer;
+      ">Submit score</button>
+<button id="btnGameOverPlay" style="
+        padding:10px 12px; border-radius:14px;
+        border:1px solid rgba(255,255,255,.18);
+        background:rgba(255,255,255,.08);
+        color:white; font-weight:800; cursor:pointer;
+      ">Keep playing</button>
+</div>
+<div id="submitLinkFallback" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,.12);">
+  <div style="font-size:12px; opacity:.82; line-height:1.35;">
+    If the submit page didn’t open (iframe/popup blocked), copy this link and open it in a new tab:
+  </div>
+  <input id="submitLinkUrl" readonly style="width:100%; margin-top:10px; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.06); color:#fff; font-size:12px;" />
+  <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+    <button id="submitLinkCopy" style="padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,.18); background:rgba(255,145,175,.18); color:white; font-weight:800; cursor:pointer;">Copy link</button>
+    <a id="submitLinkOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.08); color:white; font-weight:800; text-decoration:none;">Open submit page</a>
+  </div>
+</div>
+</div>
+<div style="opacity:.65; margin-top:10px; font-size:12px;">
+      Wallet signing happens on the submit page (outside the game).
+    </div>
+</div>
+</div>
+</body></html>
